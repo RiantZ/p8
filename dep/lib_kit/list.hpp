@@ -1,6 +1,11 @@
 #pragma once
 
 #include <utility>
+#include <cassert>
+#include <cstdlib>
+#include <cstring>
+#include <stddef.h>
+#include <stdint.h>
 
 namespace kit
 {
