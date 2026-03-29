@@ -1,0 +1,3 @@
+#!/bin/sh powershell
+
+python script/clang_format.py --apply --staged
