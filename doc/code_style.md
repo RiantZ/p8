@@ -96,7 +96,7 @@ const static s_my_struct gs_my_global_val = {0, 0};
 //Class
 class c_my_class
 {
-  void *m_data = nullptr;
+  void *mp_data = nullptr;
 public:
   c_my_class(uint32_t iu_init_var);
 };
