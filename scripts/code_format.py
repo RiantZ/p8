@@ -1,4 +1,22 @@
 #!/usr/bin/env python3
+
+"""
+# All tests
+python3 -m pytest scripts/test_code_format.py
+
+# Verbose
+python3 -m pytest scripts/test_code_format.py -v
+
+# Special test
+python3 -m pytest scripts/test_code_format.py::TestIsPathExcluded::test_dir_prefix_pattern_matches
+
+# one Class
+python3 -m pytest scripts/test_code_format.py::TestCheckFormatting
+
+# Std output
+python3 -m pytest scripts/test_code_format.py -v -s
+"""
+
 import subprocess
 import argparse
 import os
