@@ -58,7 +58,7 @@ float get_miter_per_second(uint64_t                                             
 }
 
 #pragma optimize("", off)
-int32_t Sum_Million()
+int32_t sum_million()
 {
     int32_t li_val = 0;
     for(int i = 0; i < 1'000'000; i++)
@@ -108,47 +108,47 @@ TEST(SpinLockTests, Performance)
     std::cout << "Sem per sec.: " << get_miter_per_second(1'000'000, begin, end) << "M" << std::endl;
 
 #if defined(_WIN32) || defined(_WIN64)
-    HANDLE lh_Mutex = CreateMutex(NULL, FALSE, NULL);
+    HANDLE lp_mutex = CreateMutex(NULL, FALSE, NULL);
 
     begin           = std::chrono::high_resolution_clock::now();
 
     for(int i = 0; i < 1'000'000; i++)
     {
-        WaitForSingleObject(lh_Mutex, INFINITE);
+        WaitForSingleObject(lp_mutex, INFINITE);
         li_val++;
-        ReleaseMutex(lh_Mutex);
+        ReleaseMutex(lp_mutex);
     }
 
     end = std::chrono::high_resolution_clock::now();
     std::cout << "WND per sec.: " << get_miter_per_second(1'000'000, begin, end) << "M" << std::endl;
 
-    CloseHandle(lh_Mutex);
+    CloseHandle(lp_mutex);
 #elif defined(__linux__)
-    pthread_mutex_t i_Lock;
+    pthread_mutex_t ls_lock;
 
-    pthread_mutexattr_t l_sAttr;
-    memset(&l_sAttr, 0, sizeof(pthread_mutexattr_t));
-    pthread_mutexattr_init(&l_sAttr);
-    pthread_mutexattr_settype(&l_sAttr, PTHREAD_MUTEX_RECURSIVE);
-    pthread_mutex_init(&i_Lock, &l_sAttr);
-    pthread_mutexattr_destroy(&l_sAttr);
+    pthread_mutexattr_t ls_attr;
+    memset(&ls_attr, 0, sizeof(pthread_mutexattr_t));
+    pthread_mutexattr_init(&ls_attr);
+    pthread_mutexattr_settype(&ls_attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&ls_lock, &ls_attr);
+    pthread_mutexattr_destroy(&ls_attr);
 
     begin = std::chrono::high_resolution_clock::now();
     for(int i = 0; i < 1'000'000; i++)
     {
-        pthread_mutex_lock(&i_Lock);
+        pthread_mutex_lock(&ls_lock);
         li_val++;
-        pthread_mutex_unlock(&i_Lock);
+        pthread_mutex_unlock(&ls_lock);
     }
 
     end = std::chrono::high_resolution_clock::now();
     std::cout << "LNX per sec.: " << get_miter_per_second(1'000'000, begin, end) << "M" << std::endl;
 
-    pthread_mutex_destroy(&i_Lock);
+    pthread_mutex_destroy(&ls_lock);
 #endif
 
     begin = std::chrono::high_resolution_clock::now();
-    Sum_Million();
+    sum_million();
     end = std::chrono::high_resolution_clock::now();
     std::cout << "NUL per sec.: " << get_miter_per_second(1'000'000, begin, end) << "M" << std::endl;
 }
@@ -162,7 +162,7 @@ TEST(SpinLockTests, Concurency)
     uint32_t                 lu_iterations  = 100'000;
     uint32_t                 lu_cores_count = std::thread::hardware_concurrency();
 
-    for(size_t zI = 0; zI < lu_cores_count; zI++)
+    for(size_t lz_i = 0; lz_i < lu_cores_count; lz_i++)
     {
         lc_threads.push_back(std::thread(
             [&]

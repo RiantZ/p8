@@ -5,11 +5,11 @@
 /// @param i_iArgC
 /// @param i_pArgV
 /// @return
-int main(int i_iArgC, char *i_pArgV[])
+int main(int ii_argc, char *ip_argv[])
 {
-    (void)(i_iArgC);
-    (void)(i_pArgV);
+    (void)(ii_argc);
+    (void)(ip_argv);
 
-    ::testing::InitGoogleTest(&i_iArgC, i_pArgV);
+    ::testing::InitGoogleTest(&ii_argc, ip_argv);
     return RUN_ALL_TESTS();
 }

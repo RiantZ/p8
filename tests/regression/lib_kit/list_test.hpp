@@ -1,553 +1,706 @@
 #include "list.hpp"
 
 /// @brief Test fixture for c_lst
-class CLstTest : public ::testing::Test
+class c_lst_test : public ::testing::Test
 {
 protected:
-    kit::c_lst<int> lst;
+    kit::c_lst<int> mc_lst;
 };
 
-TEST_F(CLstTest, ConstructorEmpty)
+TEST_F(c_lst_test, ConstructorEmpty)
 {
-    EXPECT_EQ(lst.size(), 0);
-    EXPECT_TRUE(lst.begin() == lst.end());
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_TRUE(mc_lst.begin() == mc_lst.end());
 }
 
-TEST_F(CLstTest, ConstructorArgs)
+TEST_F(c_lst_test, ConstructorArgs)
 {
-    lst = { 10, 20, 30, 40, 50, 60, 70, 80 };
-    EXPECT_EQ(lst.size(), 8);
+    mc_lst = { 10, 20, 30, 40, 50, 60, 70, 80 };
+    EXPECT_EQ(mc_lst.size(), 8);
 
-    int l_iSum = 0;
-    for(auto v : lst)
+    int li_sum = 0;
+    for(auto v : mc_lst)
     {
-        l_iSum += v;
+        li_sum += v;
     }
 
-    EXPECT_EQ(l_iSum, 360);
+    EXPECT_EQ(li_sum, 360);
 }
 
-class CLstTestValInt : public ::testing::Test
+class c_lst_test_val_int : public ::testing::Test
 {
 protected:
-    kit::c_lst<int> lst = { 10, 20, 30, 40, 50, 60, 70, 80 };
-    ;
+    kit::c_lst<int> mc_lst = { 10, 20, 30, 40, 50, 60, 70, 80 };
 };
 
-TEST_F(CLstTestValInt, Iterator)
+TEST_F(c_lst_test_val_int, Iterator)
 {
-    int l_iSum = 0;
-    for(auto v : lst)
+    int li_sum = 0;
+    for(auto v : mc_lst)
     {
-        l_iSum += v;
+        li_sum += v;
     }
 
-    EXPECT_EQ(l_iSum, 360);
+    EXPECT_EQ(li_sum, 360);
 
-    auto l_cIt = lst.begin();
-    EXPECT_EQ(10, *l_cIt++);
-    EXPECT_EQ(20, *l_cIt++);
-    EXPECT_EQ(30, *l_cIt++);
-    EXPECT_EQ(40, *l_cIt++);
-    EXPECT_EQ(50, *l_cIt++);
-    EXPECT_EQ(60, *l_cIt++);
-    EXPECT_EQ(70, *l_cIt++);
-    EXPECT_EQ(80, *l_cIt++);
-    EXPECT_EQ(lst.end(), l_cIt);
+    auto lc_it = mc_lst.begin();
+    EXPECT_EQ(10, *lc_it++);
+    EXPECT_EQ(20, *lc_it++);
+    EXPECT_EQ(30, *lc_it++);
+    EXPECT_EQ(40, *lc_it++);
+    EXPECT_EQ(50, *lc_it++);
+    EXPECT_EQ(60, *lc_it++);
+    EXPECT_EQ(70, *lc_it++);
+    EXPECT_EQ(80, *lc_it++);
+    EXPECT_EQ(mc_lst.end(), lc_it);
 
-    l_cIt = lst.end();
+    lc_it = mc_lst.end();
 
-    EXPECT_EQ(80, *(--l_cIt));
-    EXPECT_EQ(70, *(--l_cIt));
-    EXPECT_EQ(60, *(--l_cIt));
-    EXPECT_EQ(50, *(--l_cIt));
-    EXPECT_EQ(40, *(--l_cIt));
-    EXPECT_EQ(30, *(--l_cIt));
-    EXPECT_EQ(20, *(--l_cIt));
-    EXPECT_EQ(10, *(--l_cIt));
+    EXPECT_EQ(80, *(--lc_it));
+    EXPECT_EQ(70, *(--lc_it));
+    EXPECT_EQ(60, *(--lc_it));
+    EXPECT_EQ(50, *(--lc_it));
+    EXPECT_EQ(40, *(--lc_it));
+    EXPECT_EQ(30, *(--lc_it));
+    EXPECT_EQ(20, *(--lc_it));
+    EXPECT_EQ(10, *(--lc_it));
 
-    auto l_cConstIt = lst.cbegin();
+    auto lc_const_it = mc_lst.cbegin();
 
-    EXPECT_EQ(10, *l_cConstIt++);
-    EXPECT_EQ(20, *l_cConstIt++);
-    EXPECT_EQ(30, *l_cConstIt++);
-    EXPECT_EQ(40, *l_cConstIt++);
-    EXPECT_EQ(50, *l_cConstIt++);
-    EXPECT_EQ(60, *l_cConstIt++);
-    EXPECT_EQ(70, *l_cConstIt++);
-    EXPECT_EQ(80, *l_cConstIt++);
-    EXPECT_EQ(lst.cend(), l_cConstIt);
+    EXPECT_EQ(10, *lc_const_it++);
+    EXPECT_EQ(20, *lc_const_it++);
+    EXPECT_EQ(30, *lc_const_it++);
+    EXPECT_EQ(40, *lc_const_it++);
+    EXPECT_EQ(50, *lc_const_it++);
+    EXPECT_EQ(60, *lc_const_it++);
+    EXPECT_EQ(70, *lc_const_it++);
+    EXPECT_EQ(80, *lc_const_it++);
+    EXPECT_EQ(mc_lst.cend(), lc_const_it);
 
-    l_cConstIt = lst.cend();
+    lc_const_it = mc_lst.cend();
 
-    EXPECT_EQ(80, *(--l_cConstIt));
-    EXPECT_EQ(70, *(--l_cConstIt));
-    EXPECT_EQ(60, *(--l_cConstIt));
-    EXPECT_EQ(50, *(--l_cConstIt));
-    EXPECT_EQ(40, *(--l_cConstIt));
-    EXPECT_EQ(30, *(--l_cConstIt));
-    EXPECT_EQ(20, *(--l_cConstIt));
-    EXPECT_EQ(10, *(--l_cConstIt));
+    EXPECT_EQ(80, *(--lc_const_it));
+    EXPECT_EQ(70, *(--lc_const_it));
+    EXPECT_EQ(60, *(--lc_const_it));
+    EXPECT_EQ(50, *(--lc_const_it));
+    EXPECT_EQ(40, *(--lc_const_it));
+    EXPECT_EQ(30, *(--lc_const_it));
+    EXPECT_EQ(20, *(--lc_const_it));
+    EXPECT_EQ(10, *(--lc_const_it));
 }
 
-class citem
+class c_item
 {
 public:
-    int val;
-    citem()
-        : val(0)
+    int mi_val;
+    c_item()
+        : mi_val(0)
     {
     }
-    citem(citem &&other)
-        : val(other.val)
+    c_item(c_item &&iv_other)
+        : mi_val(iv_other.mi_val)
     {
-        other.val = -1;
+        iv_other.mi_val = -1;
     }
-    citem(const citem &other)
-        : val(other.val)
+    c_item(const c_item &ir_other)
+        : mi_val(ir_other.mi_val)
     {
     }
-    citem(int i)
-        : val(i)
+    c_item(int ii_val)
+        : mi_val(ii_val)
     {
     }
 
-    citem &operator=(citem &&other) noexcept
+    c_item &operator=(c_item &&iv_other) noexcept
     {
-        if(this != &other)
+        if(this != &iv_other)
         {
-            val       = other.val;
+            mi_val          = iv_other.mi_val;
             // Release the data pointer from the source object so that
             // the destructor does not free the memory multiple times.
-            other.val = -1;
+            iv_other.mi_val = -1;
         }
         return *this;
     }
 
-    citem &operator=(const citem &other)
+    c_item &operator=(const c_item &ir_other)
     {
-        val = other.val;
+        mi_val = ir_other.mi_val;
         return *this;
     }
 };
 
-class CLstTestValCitem : public ::testing::Test
+class c_lst_test_val_citem : public ::testing::Test
 {
 protected:
-    kit::c_lst<citem> lst = { { 10 }, { 20 }, { 30 }, { 40 }, { 50 }, { 60 }, { 70 }, { 80 } };
+    kit::c_lst<c_item> mc_lst = { { 10 }, { 20 }, { 30 }, { 40 }, { 50 }, { 60 }, { 70 }, { 80 } };
 };
 
-TEST_F(CLstTestValCitem, Iterator)
+TEST_F(c_lst_test_val_citem, Iterator)
 {
-    int l_iSum = 0;
-    for(auto v : lst)
+    int li_sum = 0;
+    for(auto v : mc_lst)
     {
-        l_iSum += v.val;
+        li_sum += v.mi_val;
     }
 
-    EXPECT_EQ(l_iSum, 360);
+    EXPECT_EQ(li_sum, 360);
 
-    auto l_cIt = lst.begin();
-    EXPECT_EQ(10, l_cIt->val);
-    l_cIt++;
-    EXPECT_EQ(20, l_cIt->val);
-    l_cIt++;
-    EXPECT_EQ(30, l_cIt->val);
-    l_cIt++;
-    EXPECT_EQ(40, l_cIt->val);
-    l_cIt++;
-    EXPECT_EQ(50, l_cIt->val);
-    l_cIt++;
-    EXPECT_EQ(60, l_cIt->val);
-    l_cIt++;
-    EXPECT_EQ(70, l_cIt->val);
-    l_cIt++;
-    EXPECT_EQ(80, l_cIt->val);
-    l_cIt++;
-    EXPECT_EQ(lst.end(), l_cIt);
+    auto lc_it = mc_lst.begin();
+    EXPECT_EQ(10, lc_it->mi_val);
+    lc_it++;
+    EXPECT_EQ(20, lc_it->mi_val);
+    lc_it++;
+    EXPECT_EQ(30, lc_it->mi_val);
+    lc_it++;
+    EXPECT_EQ(40, lc_it->mi_val);
+    lc_it++;
+    EXPECT_EQ(50, lc_it->mi_val);
+    lc_it++;
+    EXPECT_EQ(60, lc_it->mi_val);
+    lc_it++;
+    EXPECT_EQ(70, lc_it->mi_val);
+    lc_it++;
+    EXPECT_EQ(80, lc_it->mi_val);
+    lc_it++;
+    EXPECT_EQ(mc_lst.end(), lc_it);
 
-    l_cIt = --(lst.end());
+    lc_it = --(mc_lst.end());
 
-    EXPECT_EQ(80, l_cIt->val);
-    l_cIt--;
-    EXPECT_EQ(70, l_cIt->val);
-    l_cIt--;
-    EXPECT_EQ(60, l_cIt->val);
-    l_cIt--;
-    EXPECT_EQ(50, l_cIt->val);
-    l_cIt--;
-    EXPECT_EQ(40, l_cIt->val);
-    l_cIt--;
-    EXPECT_EQ(30, l_cIt->val);
-    l_cIt--;
-    EXPECT_EQ(20, l_cIt->val);
-    l_cIt--;
-    EXPECT_EQ(10, l_cIt->val);
-    l_cIt--;
+    EXPECT_EQ(80, lc_it->mi_val);
+    lc_it--;
+    EXPECT_EQ(70, lc_it->mi_val);
+    lc_it--;
+    EXPECT_EQ(60, lc_it->mi_val);
+    lc_it--;
+    EXPECT_EQ(50, lc_it->mi_val);
+    lc_it--;
+    EXPECT_EQ(40, lc_it->mi_val);
+    lc_it--;
+    EXPECT_EQ(30, lc_it->mi_val);
+    lc_it--;
+    EXPECT_EQ(20, lc_it->mi_val);
+    lc_it--;
+    EXPECT_EQ(10, lc_it->mi_val);
+    lc_it--;
 
-    auto l_cConstIt = lst.cbegin();
+    auto lc_const_it = mc_lst.cbegin();
 
-    EXPECT_EQ(10, l_cConstIt->val);
-    l_cConstIt++;
-    EXPECT_EQ(20, l_cConstIt->val);
-    l_cConstIt++;
-    EXPECT_EQ(30, l_cConstIt->val);
-    l_cConstIt++;
-    EXPECT_EQ(40, l_cConstIt->val);
-    l_cConstIt++;
-    EXPECT_EQ(50, l_cConstIt->val);
-    l_cConstIt++;
-    EXPECT_EQ(60, l_cConstIt->val);
-    l_cConstIt++;
-    EXPECT_EQ(70, l_cConstIt->val);
-    l_cConstIt++;
-    EXPECT_EQ(80, l_cConstIt->val);
-    l_cConstIt++;
-    EXPECT_EQ(lst.cend(), l_cConstIt);
+    EXPECT_EQ(10, lc_const_it->mi_val);
+    lc_const_it++;
+    EXPECT_EQ(20, lc_const_it->mi_val);
+    lc_const_it++;
+    EXPECT_EQ(30, lc_const_it->mi_val);
+    lc_const_it++;
+    EXPECT_EQ(40, lc_const_it->mi_val);
+    lc_const_it++;
+    EXPECT_EQ(50, lc_const_it->mi_val);
+    lc_const_it++;
+    EXPECT_EQ(60, lc_const_it->mi_val);
+    lc_const_it++;
+    EXPECT_EQ(70, lc_const_it->mi_val);
+    lc_const_it++;
+    EXPECT_EQ(80, lc_const_it->mi_val);
+    lc_const_it++;
+    EXPECT_EQ(mc_lst.cend(), lc_const_it);
 
-    l_cConstIt = --(lst.cend());
+    lc_const_it = --(mc_lst.cend());
 
-    EXPECT_EQ(80, l_cConstIt->val);
-    l_cConstIt--;
-    EXPECT_EQ(70, l_cConstIt->val);
-    l_cConstIt--;
-    EXPECT_EQ(60, l_cConstIt->val);
-    l_cConstIt--;
-    EXPECT_EQ(50, l_cConstIt->val);
-    l_cConstIt--;
-    EXPECT_EQ(40, l_cConstIt->val);
-    l_cConstIt--;
-    EXPECT_EQ(30, l_cConstIt->val);
-    l_cConstIt--;
-    EXPECT_EQ(20, l_cConstIt->val);
-    l_cConstIt--;
-    EXPECT_EQ(10, l_cConstIt->val);
-    l_cConstIt--;
+    EXPECT_EQ(80, lc_const_it->mi_val);
+    lc_const_it--;
+    EXPECT_EQ(70, lc_const_it->mi_val);
+    lc_const_it--;
+    EXPECT_EQ(60, lc_const_it->mi_val);
+    lc_const_it--;
+    EXPECT_EQ(50, lc_const_it->mi_val);
+    lc_const_it--;
+    EXPECT_EQ(40, lc_const_it->mi_val);
+    lc_const_it--;
+    EXPECT_EQ(30, lc_const_it->mi_val);
+    lc_const_it--;
+    EXPECT_EQ(20, lc_const_it->mi_val);
+    lc_const_it--;
+    EXPECT_EQ(10, lc_const_it->mi_val);
+    lc_const_it--;
 }
 
-TEST_F(CLstTestValCitem, PushFirstMove)
+TEST_F(c_lst_test_val_citem, PushFirstMove)
 {
-    citem item(100);
-    lst.push_first(std::move(item));
-    EXPECT_EQ(lst.size(), 9); // original 8 + 1
-    EXPECT_EQ(lst.front().val, 100);
-    EXPECT_EQ(item.val, -1);  // moved from
+    c_item lo_item(100);
+    mc_lst.push_first(std::move(lo_item));
+    EXPECT_EQ(mc_lst.size(), 9);   // original 8 + 1
+    EXPECT_EQ(mc_lst.front().mi_val, 100);
+    EXPECT_EQ(lo_item.mi_val, -1); // moved from
 }
 
-TEST_F(CLstTest, PullFirst)
+TEST_F(c_lst_test, PullFirst)
 {
-    lst.push_last(1);
-    lst.push_last(2);
-    EXPECT_EQ(lst.pull_first(), 1);
-    EXPECT_EQ(lst.size(), 1);
-    EXPECT_EQ(lst.front(), 2);
-    EXPECT_EQ(lst.back(), 2);
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    EXPECT_EQ(mc_lst.pull_first(), 1);
+    EXPECT_EQ(mc_lst.size(), 1);
+    EXPECT_EQ(mc_lst.front(), 2);
+    EXPECT_EQ(mc_lst.back(), 2);
 }
 
-TEST_F(CLstTest, PullLast)
+TEST_F(c_lst_test, PullLast)
 {
-    lst.push_last(1);
-    lst.push_last(2);
-    EXPECT_EQ(lst.pull_last(), 2);
-    EXPECT_EQ(lst.size(), 1);
-    EXPECT_EQ(lst.front(), 1);
-    EXPECT_EQ(lst.back(), 1);
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    EXPECT_EQ(mc_lst.pull_last(), 2);
+    EXPECT_EQ(mc_lst.size(), 1);
+    EXPECT_EQ(mc_lst.front(), 1);
+    EXPECT_EQ(mc_lst.back(), 1);
 }
 
-TEST_F(CLstTest, Iterators)
+TEST_F(c_lst_test, Iterators)
 {
-    lst.push_last(1);
-    lst.push_last(2);
-    lst.push_last(3);
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    mc_lst.push_last(3);
 
-    auto it = lst.begin();
-    EXPECT_EQ(*it, 1);
-    ++it;
-    EXPECT_EQ(*it, 2);
-    ++it;
-    EXPECT_EQ(*it, 3);
-    ++it;
-    EXPECT_TRUE(it == lst.end());
+    auto lc_it = mc_lst.begin();
+    EXPECT_EQ(*lc_it, 1);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 2);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 3);
+    ++lc_it;
+    EXPECT_TRUE(lc_it == mc_lst.end());
 }
 
-TEST_F(CLstTest, Clear)
+TEST_F(c_lst_test, Clear)
 {
-    lst.push_last(1);
-    lst.push_last(2);
-    EXPECT_EQ(lst.size(), 2);
-    lst.clear();
-    EXPECT_EQ(lst.size(), 0);
-    EXPECT_TRUE(lst.begin() == lst.end());
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    EXPECT_EQ(mc_lst.size(), 2);
+    mc_lst.clear();
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_TRUE(mc_lst.begin() == mc_lst.end());
 }
 
-TEST_F(CLstTest, ClearWithCleanup)
+TEST_F(c_lst_test, ClearWithCleanup)
 {
-    lst.push_last(1);
-    lst.push_last(2);
-    lst.push_last(3);
-    EXPECT_EQ(lst.size(), 3);
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    mc_lst.push_last(3);
+    EXPECT_EQ(mc_lst.size(), 3);
 
-    std::vector<int> cleanedValues;
-    lst.clear([&](int &val) { cleanedValues.push_back(val); });
+    std::vector<int> lc_cleaned_values;
+    mc_lst.clear([&](int &val) { lc_cleaned_values.push_back(val); });
 
-    EXPECT_EQ(lst.size(), 0);
-    EXPECT_TRUE(lst.begin() == lst.end());
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_TRUE(mc_lst.begin() == mc_lst.end());
     // Check that cleanup was called for all elements
-    EXPECT_EQ(cleanedValues.size(), 3);
-    EXPECT_EQ(cleanedValues[0], 1);
-    EXPECT_EQ(cleanedValues[1], 2);
-    EXPECT_EQ(cleanedValues[2], 3);
+    EXPECT_EQ(lc_cleaned_values.size(), 3);
+    EXPECT_EQ(lc_cleaned_values[0], 1);
+    EXPECT_EQ(lc_cleaned_values[1], 2);
+    EXPECT_EQ(lc_cleaned_values[2], 3);
 }
 
-TEST_F(CLstTest, ClearWithCleanupEmpty)
+TEST_F(c_lst_test, ClearWithCleanupEmpty)
 {
-    bool cleanupCalled = false;
-    lst.clear(
+    bool lb_cleanup_called = false;
+    mc_lst.clear(
         [&](int &val)
         {
-            cleanupCalled = true;
+            lb_cleanup_called = true;
             (void)(val);
         });
-    EXPECT_FALSE(cleanupCalled);
-    EXPECT_EQ(lst.size(), 0);
-    EXPECT_TRUE(lst.begin() == lst.end());
+    EXPECT_FALSE(lb_cleanup_called);
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_TRUE(mc_lst.begin() == mc_lst.end());
 }
 
-TEST_F(CLstTestValCitem, ClearWithCleanupMove)
+TEST_F(c_lst_test_val_citem, ClearWithCleanupMove)
 {
-    // Test with citem class that tracks moves
-    std::vector<int> originalValues;
-    for(auto &item : lst)
+    // Test with c_item class that tracks moves
+    std::vector<int> lc_original_values;
+    for(auto &ro_item : mc_lst)
     {
-        originalValues.push_back(item.val);
+        lc_original_values.push_back(ro_item.mi_val);
     }
-    EXPECT_EQ(originalValues.size(), 8); // Should have 8 elements
+    EXPECT_EQ(lc_original_values.size(), 8); // Should have 8 elements
 
-    std::vector<int> cleanedValues;
-    lst.clear([&](citem &item) { cleanedValues.push_back(item.val); });
+    std::vector<int> lc_cleaned_values;
+    mc_lst.clear([&](c_item &ro_item) { lc_cleaned_values.push_back(ro_item.mi_val); });
 
-    EXPECT_EQ(lst.size(), 0);
-    EXPECT_TRUE(lst.begin() == lst.end());
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_TRUE(mc_lst.begin() == mc_lst.end());
     // Check that cleanup was called for all elements
-    EXPECT_EQ(cleanedValues.size(), 8);
+    EXPECT_EQ(lc_cleaned_values.size(), 8);
     // Values should be in order: 10, 20, 30, 40, 50, 60, 70, 80
-    EXPECT_EQ(cleanedValues[0], 10);
-    EXPECT_EQ(cleanedValues[1], 20);
-    EXPECT_EQ(cleanedValues[2], 30);
-    EXPECT_EQ(cleanedValues[3], 40);
-    EXPECT_EQ(cleanedValues[4], 50);
-    EXPECT_EQ(cleanedValues[5], 60);
-    EXPECT_EQ(cleanedValues[6], 70);
-    EXPECT_EQ(cleanedValues[7], 80);
+    EXPECT_EQ(lc_cleaned_values[0], 10);
+    EXPECT_EQ(lc_cleaned_values[1], 20);
+    EXPECT_EQ(lc_cleaned_values[2], 30);
+    EXPECT_EQ(lc_cleaned_values[3], 40);
+    EXPECT_EQ(lc_cleaned_values[4], 50);
+    EXPECT_EQ(lc_cleaned_values[5], 60);
+    EXPECT_EQ(lc_cleaned_values[6], 70);
+    EXPECT_EQ(lc_cleaned_values[7], 80);
 }
 
-TEST_F(CLstTest, InitializerList)
+TEST_F(c_lst_test, InitializerList)
 {
-    kit::c_lst<int> lst2 = { 1, 2, 3 };
-    EXPECT_EQ(lst2.size(), 3);
-    auto it = lst2.begin();
-    EXPECT_EQ(*it, 1);
-    ++it;
-    EXPECT_EQ(*it, 2);
-    ++it;
-    EXPECT_EQ(*it, 3);
+    kit::c_lst<int> lc_lst2 = { 1, 2, 3 };
+    EXPECT_EQ(lc_lst2.size(), 3);
+    auto lc_it = lc_lst2.begin();
+    EXPECT_EQ(*lc_it, 1);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 2);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 3);
 }
 
-TEST_F(CLstTest, PushFirstEmpty)
+TEST_F(c_lst_test, PushFirstEmpty)
 {
-    lst.push_first(42);
-    EXPECT_EQ(lst.size(), 1);
-    EXPECT_EQ(lst.front(), 42);
-    EXPECT_EQ(lst.back(), 42);
+    mc_lst.push_first(42);
+    EXPECT_EQ(mc_lst.size(), 1);
+    EXPECT_EQ(mc_lst.front(), 42);
+    EXPECT_EQ(mc_lst.back(), 42);
 }
 
-TEST_F(CLstTest, PushFirstNonEmpty)
+TEST_F(c_lst_test, PushFirstNonEmpty)
 {
-    lst.push_last(1);
-    lst.push_last(2);
-    lst.push_first(0);
-    EXPECT_EQ(lst.size(), 3);
-    EXPECT_EQ(lst.front(), 0);
-    EXPECT_EQ(lst.back(), 2);
-    auto it = lst.begin();
-    EXPECT_EQ(*it, 0);
-    ++it;
-    EXPECT_EQ(*it, 1);
-    ++it;
-    EXPECT_EQ(*it, 2);
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    mc_lst.push_first(0);
+    EXPECT_EQ(mc_lst.size(), 3);
+    EXPECT_EQ(mc_lst.front(), 0);
+    EXPECT_EQ(mc_lst.back(), 2);
+    auto lc_it = mc_lst.begin();
+    EXPECT_EQ(*lc_it, 0);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 1);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 2);
 }
 
-TEST_F(CLstTest, PushFirstMultiple)
+TEST_F(c_lst_test, PushFirstMultiple)
 {
-    lst.push_first(3);
-    lst.push_first(2);
-    lst.push_first(1);
-    EXPECT_EQ(lst.size(), 3);
-    EXPECT_EQ(lst.front(), 1);
-    EXPECT_EQ(lst.back(), 3);
-    auto it = lst.begin();
-    EXPECT_EQ(*it, 1);
-    ++it;
-    EXPECT_EQ(*it, 2);
-    ++it;
-    EXPECT_EQ(*it, 3);
+    mc_lst.push_first(3);
+    mc_lst.push_first(2);
+    mc_lst.push_first(1);
+    EXPECT_EQ(mc_lst.size(), 3);
+    EXPECT_EQ(mc_lst.front(), 1);
+    EXPECT_EQ(mc_lst.back(), 3);
+    auto lc_it = mc_lst.begin();
+    EXPECT_EQ(*lc_it, 1);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 2);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 3);
 }
 
-TEST_F(CLstTest, PushNextBegin)
+TEST_F(c_lst_test, PushNextBegin)
 {
-    lst.push_last(1);
-    lst.push_last(3);
-    auto it    = lst.begin();
-    auto newIt = lst.push_next(it, 2);
-    EXPECT_EQ(lst.size(), 3);
-    EXPECT_EQ(*newIt, 2);
-    it = lst.begin();
-    EXPECT_EQ(*it, 1);
-    ++it;
-    EXPECT_EQ(*it, 2);
-    ++it;
-    EXPECT_EQ(*it, 3);
+    mc_lst.push_last(1);
+    mc_lst.push_last(3);
+    auto lc_it     = mc_lst.begin();
+    auto lc_new_it = mc_lst.push_next(lc_it, 2);
+    EXPECT_EQ(mc_lst.size(), 3);
+    EXPECT_EQ(*lc_new_it, 2);
+    lc_it = mc_lst.begin();
+    EXPECT_EQ(*lc_it, 1);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 2);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 3);
 }
 
-TEST_F(CLstTest, PushNextMiddle)
+TEST_F(c_lst_test, PushNextMiddle)
 {
-    lst.push_last(1);
-    lst.push_last(2);
-    lst.push_last(4);
-    auto it = lst.begin();
-    ++it; // points to 2
-    auto newIt = lst.push_next(it, 3);
-    EXPECT_EQ(lst.size(), 4);
-    EXPECT_EQ(*newIt, 3);
-    it = lst.begin();
-    EXPECT_EQ(*it, 1);
-    ++it;
-    EXPECT_EQ(*it, 2);
-    ++it;
-    EXPECT_EQ(*it, 3);
-    ++it;
-    EXPECT_EQ(*it, 4);
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    mc_lst.push_last(4);
+    auto lc_it = mc_lst.begin();
+    ++lc_it; // points to 2
+    auto lc_new_it = mc_lst.push_next(lc_it, 3);
+    EXPECT_EQ(mc_lst.size(), 4);
+    EXPECT_EQ(*lc_new_it, 3);
+    lc_it = mc_lst.begin();
+    EXPECT_EQ(*lc_it, 1);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 2);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 3);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 4);
 }
 
-TEST_F(CLstTest, PushNextEnd)
+TEST_F(c_lst_test, PushNextEnd)
 {
-    lst.push_last(1);
-    lst.push_last(2);
-    auto it    = lst.end();
-    auto newIt = lst.push_next(it, 3);
-    EXPECT_EQ(newIt, lst.end()); // Should return end() for invalid iterator
-    EXPECT_EQ(lst.size(), 2);    // Size should not change
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    auto lc_it     = mc_lst.end();
+    auto lc_new_it = mc_lst.push_next(lc_it, 3);
+    EXPECT_EQ(lc_new_it, mc_lst.end()); // Should return end() for invalid iterator
+    EXPECT_EQ(mc_lst.size(), 2);        // Size should not change
 }
 
-TEST_F(CLstTest, PushNextEmptyList)
+TEST_F(c_lst_test, PushNextEmptyList)
 {
-    auto it    = lst.begin();
-    auto newIt = lst.push_next(it, 1);
-    EXPECT_EQ(newIt, lst.end()); // Should return end() for empty list
-    EXPECT_EQ(lst.size(), 0);    // Size should not change
+    auto lc_it     = mc_lst.begin();
+    auto lc_new_it = mc_lst.push_next(lc_it, 1);
+    EXPECT_EQ(lc_new_it, mc_lst.end()); // Should return end() for empty list
+    EXPECT_EQ(mc_lst.size(), 0);        // Size should not change
 }
 
-TEST_F(CLstTestValCitem, PushNextMove)
+TEST_F(c_lst_test_val_citem, PushNextMove)
 {
-    citem item(50);
-    auto  it   = lst.begin();
+    c_item lo_item(50);
+    auto   lc_it   = mc_lst.begin();
     // insert after first element (10)
-    auto newIt = lst.push_next(it, std::move(item));
-    EXPECT_EQ(lst.size(), 9); // original 8 + 1
-    EXPECT_EQ((*newIt).val, 50);
-    EXPECT_EQ(item.val, -1);  // moved from
+    auto lc_new_it = mc_lst.push_next(lc_it, std::move(lo_item));
+    EXPECT_EQ(mc_lst.size(), 9);   // original 8 + 1
+    EXPECT_EQ((*lc_new_it).mi_val, 50);
+    EXPECT_EQ(lo_item.mi_val, -1); // moved from
     // Check order: 10, 50, 20, 30, 40, 50, 60, 70, 80
-    it = lst.begin();
-    EXPECT_EQ(it->val, 10);
-    ++it;
-    EXPECT_EQ(it->val, 50);
-    ++it;
-    EXPECT_EQ(it->val, 20);
+    lc_it = mc_lst.begin();
+    EXPECT_EQ(lc_it->mi_val, 10);
+    ++lc_it;
+    EXPECT_EQ(lc_it->mi_val, 50);
+    ++lc_it;
+    EXPECT_EQ(lc_it->mi_val, 20);
 }
 
-TEST_F(CLstTest, RemoveBegin)
+TEST_F(c_lst_test, RemoveBegin)
 {
-    lst.push_last(1);
-    lst.push_last(2);
-    lst.push_last(3);
-    auto it     = lst.begin();
-    auto nextIt = lst.remove(it);
-    EXPECT_EQ(lst.size(), 2);
-    EXPECT_EQ(*nextIt, 2);
-    it = lst.begin();
-    EXPECT_EQ(*it, 2);
-    ++it;
-    EXPECT_EQ(*it, 3);
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    mc_lst.push_last(3);
+    auto lc_it      = mc_lst.begin();
+    auto lc_next_it = mc_lst.remove(lc_it);
+    EXPECT_EQ(mc_lst.size(), 2);
+    EXPECT_EQ(*lc_next_it, 2);
+    lc_it = mc_lst.begin();
+    EXPECT_EQ(*lc_it, 2);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 3);
 }
 
-TEST_F(CLstTest, RemoveMiddle)
+TEST_F(c_lst_test, RemoveMiddle)
 {
-    lst.push_last(1);
-    lst.push_last(2);
-    lst.push_last(3);
-    lst.push_last(4);
-    auto it = lst.begin();
-    ++it; // points to 2
-    auto nextIt = lst.remove(it);
-    EXPECT_EQ(lst.size(), 3);
-    EXPECT_EQ(*nextIt, 3);
-    it = lst.begin();
-    EXPECT_EQ(*it, 1);
-    ++it;
-    EXPECT_EQ(*it, 3);
-    ++it;
-    EXPECT_EQ(*it, 4);
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    mc_lst.push_last(3);
+    mc_lst.push_last(4);
+    auto lc_it = mc_lst.begin();
+    ++lc_it; // points to 2
+    auto lc_next_it = mc_lst.remove(lc_it);
+    EXPECT_EQ(mc_lst.size(), 3);
+    EXPECT_EQ(*lc_next_it, 3);
+    lc_it = mc_lst.begin();
+    EXPECT_EQ(*lc_it, 1);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 3);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 4);
 }
 
-TEST_F(CLstTest, RemoveEnd)
+TEST_F(c_lst_test, RemoveEnd)
 {
-    lst.push_last(1);
-    lst.push_last(2);
-    auto it     = lst.end();
-    auto nextIt = lst.remove(it);
-    EXPECT_EQ(nextIt, lst.end()); // Should return end() for invalid iterator
-    EXPECT_EQ(lst.size(), 2);     // Size should not change
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    auto lc_it      = mc_lst.end();
+    auto lc_next_it = mc_lst.remove(lc_it);
+    EXPECT_EQ(lc_next_it, mc_lst.end()); // Should return end() for invalid iterator
+    EXPECT_EQ(mc_lst.size(), 2);         // Size should not change
 }
 
-TEST_F(CLstTest, RemoveLastElement)
+TEST_F(c_lst_test, RemoveLastElement)
 {
-    lst.push_last(42);
-    auto it     = lst.begin();
-    auto nextIt = lst.remove(it);
-    EXPECT_EQ(lst.size(), 0);
-    EXPECT_EQ(nextIt, lst.end());
-    EXPECT_TRUE(lst.begin() == lst.end());
+    mc_lst.push_last(42);
+    auto lc_it      = mc_lst.begin();
+    auto lc_next_it = mc_lst.remove(lc_it);
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_EQ(lc_next_it, mc_lst.end());
+    EXPECT_TRUE(mc_lst.begin() == mc_lst.end());
 }
 
-TEST_F(CLstTest, RemoveSingleElement)
+TEST_F(c_lst_test, RemoveSingleElement)
 {
-    lst.push_last(1);
-    EXPECT_EQ(lst.size(), 1);
-    auto it     = lst.begin();
-    auto nextIt = lst.remove(it);
-    EXPECT_EQ(lst.size(), 0);
-    EXPECT_EQ(nextIt, lst.end());
+    mc_lst.push_last(1);
+    EXPECT_EQ(mc_lst.size(), 1);
+    auto lc_it      = mc_lst.begin();
+    auto lc_next_it = mc_lst.remove(lc_it);
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_EQ(lc_next_it, mc_lst.end());
 }
 
-TEST_F(CLstTest, RemoveWithCleanup)
+TEST_F(c_lst_test, RemoveWithCleanup)
 {
-    bool cleanupCalled = false;
-    lst.push_last(1);
-    lst.push_last(2);
-    lst.push_last(3);
-    auto it = lst.begin();
-    ++it; // points to 2
-    auto nextIt = lst.remove(it,
-                             [&](int &val)
-                             {
-                                 cleanupCalled = true;
-                                 EXPECT_EQ(val, 2);
-                             });
-    EXPECT_TRUE(cleanupCalled);
-    EXPECT_EQ(lst.size(), 2);
-    EXPECT_EQ(*nextIt, 3);
-    it = lst.begin();
-    EXPECT_EQ(*it, 1);
-    ++it;
-    EXPECT_EQ(*it, 3);
+    bool lb_cleanup_called = false;
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    mc_lst.push_last(3);
+    auto lc_it = mc_lst.begin();
+    ++lc_it; // points to 2
+    auto lc_next_it = mc_lst.remove(lc_it,
+                                    [&](int &val)
+                                    {
+                                        lb_cleanup_called = true;
+                                        EXPECT_EQ(val, 2);
+                                    });
+    EXPECT_TRUE(lb_cleanup_called);
+    EXPECT_EQ(mc_lst.size(), 2);
+    EXPECT_EQ(*lc_next_it, 3);
+    lc_it = mc_lst.begin();
+    EXPECT_EQ(*lc_it, 1);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 3);
+}
+
+// --- Copy constructor ---
+
+TEST_F(c_lst_test, CopyConstructor)
+{
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    mc_lst.push_last(3);
+
+    kit::c_lst<int> lc_copy(mc_lst);
+
+    EXPECT_EQ(lc_copy.size(), 3);
+
+    auto lc_it = lc_copy.begin();
+    EXPECT_EQ(*lc_it, 1);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 2);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 3);
+
+    // Verify independence: modifying original does not affect copy
+    mc_lst.push_last(4);
+    EXPECT_EQ(mc_lst.size(), 4);
+    EXPECT_EQ(lc_copy.size(), 3);
+}
+
+TEST_F(c_lst_test, CopyConstructorEmpty)
+{
+    kit::c_lst<int> lc_copy(mc_lst);
+    EXPECT_EQ(lc_copy.size(), 0);
+    EXPECT_TRUE(lc_copy.begin() == lc_copy.end());
+}
+
+// --- Move constructor ---
+
+TEST_F(c_lst_test, MoveConstructor)
+{
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+    mc_lst.push_last(3);
+
+    kit::c_lst<int> lc_moved(std::move(mc_lst));
+
+    EXPECT_EQ(lc_moved.size(), 3);
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_TRUE(mc_lst.begin() == mc_lst.end());
+
+    auto lc_it = lc_moved.begin();
+    EXPECT_EQ(*lc_it, 1);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 2);
+    ++lc_it;
+    EXPECT_EQ(*lc_it, 3);
+    ++lc_it;
+    EXPECT_TRUE(lc_it == lc_moved.end());
+}
+
+TEST_F(c_lst_test, MoveConstructorEmpty)
+{
+    kit::c_lst<int> lc_moved(std::move(mc_lst));
+    EXPECT_EQ(lc_moved.size(), 0);
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_TRUE(lc_moved.begin() == lc_moved.end());
+    EXPECT_TRUE(mc_lst.begin() == mc_lst.end());
+}
+
+// --- push_last move overload with tracked type ---
+
+TEST_F(c_lst_test_val_citem, PushLastMove)
+{
+    c_item lo_item(100);
+    mc_lst.push_last(std::move(lo_item));
+    EXPECT_EQ(mc_lst.size(), 9);   // original 8 + 1
+    EXPECT_EQ(mc_lst.back().mi_val, 100);
+    EXPECT_EQ(lo_item.mi_val, -1); // moved from
+}
+
+// --- pull_first / pull_last on single-element list ---
+
+TEST_F(c_lst_test, PullFirstSingleElement)
+{
+    mc_lst.push_last(42);
+    EXPECT_EQ(mc_lst.pull_first(), 42);
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_TRUE(mc_lst.begin() == mc_lst.end());
+}
+
+TEST_F(c_lst_test, PullLastSingleElement)
+{
+    mc_lst.push_last(42);
+    EXPECT_EQ(mc_lst.pull_last(), 42);
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_TRUE(mc_lst.begin() == mc_lst.end());
+}
+
+// --- const front() and back() ---
+
+TEST_F(c_lst_test, FrontBackConst)
+{
+    mc_lst.push_last(10);
+    mc_lst.push_last(20);
+    mc_lst.push_last(30);
+
+    const kit::c_lst<int> &lrc_lst = mc_lst;
+    EXPECT_EQ(lrc_lst.front(), 10);
+    EXPECT_EQ(lrc_lst.back(), 30);
+}
+
+// --- Pool growth (adding more elements than initial pool size) ---
+
+TEST_F(c_lst_test, PoolGrowth)
+{
+    // Default pool size is 64; add 200 elements to force multiple reallocations
+    const int li_count = 200;
+    for(int i = 0; i < li_count; ++i)
+    {
+        mc_lst.push_last(i);
+    }
+
+    EXPECT_EQ(mc_lst.size(), static_cast<size_t>(li_count));
+
+    int li_expected = 0;
+    for(auto v : mc_lst)
+    {
+        EXPECT_EQ(v, li_expected);
+        ++li_expected;
+    }
+
+    // Verify clear after growth works correctly
+    mc_lst.clear();
+    EXPECT_EQ(mc_lst.size(), 0);
+    EXPECT_TRUE(mc_lst.begin() == mc_lst.end());
+
+    // Verify list is usable after clear
+    mc_lst.push_last(999);
+    EXPECT_EQ(mc_lst.size(), 1);
+    EXPECT_EQ(mc_lst.front(), 999);
+}
+
+// --- remove(it, callback) with end() iterator ---
+
+TEST_F(c_lst_test, RemoveWithCleanupEndIterator)
+{
+    mc_lst.push_last(1);
+    mc_lst.push_last(2);
+
+    bool lb_cleanup_called = false;
+    auto lc_it             = mc_lst.end();
+    auto lc_next_it        = mc_lst.remove(lc_it, [&](int &) { lb_cleanup_called = true; });
+
+    EXPECT_FALSE(lb_cleanup_called);
+    EXPECT_EQ(lc_next_it, mc_lst.end());
+    EXPECT_EQ(mc_lst.size(), 2);
 }

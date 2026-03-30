@@ -27,7 +27,7 @@
     #define TM(i_pStr) L##i_pStr
 
     #define XCHAR      wchar_t
-typedef wchar_t tWCHAR;
+typedef wchar_t x_wchar;
 
     #define WND_HANDLE        HWND
 
@@ -47,7 +47,7 @@ typedef wchar_t tWCHAR;
     #define TM(i_pStr) i_pStr
 
     #define XCHAR      char
-typedef unsigned short tWCHAR;
+typedef unsigned short x_wchar;
     #define WND_HANDLE void *
 
     #define SHARED_EXT "so"
@@ -97,6 +97,6 @@ typedef struct _GUID
 
 #define TMM(i_pStr)   TM(i_pStr)
 
-// platfrorm specific char, Windows - wchar_t, Linix - char,
-// XCHAR defined in PTypes.hpp specific for each platform or project.
-#define tXCHAR        XCHAR
+// platform specific char, Windows - wchar_t, Linux - char,
+// XCHAR defined in ts_helpers.h specific for each platform or project.
+#define TXCHAR        XCHAR

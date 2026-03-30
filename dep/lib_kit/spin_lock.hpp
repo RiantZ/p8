@@ -14,11 +14,11 @@ namespace kit
 class c_spin_lock
 {
     /// @brief Atomic flag indicating if the lock is held.
-    std::atomic<bool> mc_flag   = { 0 };
+    std::atomic<bool> mc_flag    = { 0 };
     /// @brief ID of the thread that holds the lock.
-    std::thread::id mc_tread_id = std::thread::id();
+    std::thread::id mc_thread_id = std::thread::id();
     /// @brief Recursion count for the owning thread.
-    uint32_t mu_recursion       = 0;
+    uint32_t mu_recursion        = 0;
 
 public:
     /// @brief Default constructor.
@@ -49,13 +49,13 @@ public:
             // Optimistically assume the lock is free on the first try
             if(!mc_flag.exchange(true, std::memory_order_acquire))
             {
-                mc_tread_id  = std::this_thread::get_id();
+                mc_thread_id = std::this_thread::get_id();
                 mu_recursion = 1;
                 return;
             }
 
             // Recursive entry
-            if(std::this_thread::get_id() == mc_tread_id)
+            if(std::this_thread::get_id() == mc_thread_id)
             {
                 mu_recursion++;
                 return;
@@ -77,13 +77,13 @@ public:
     {
         if(!mc_flag.load(std::memory_order_relaxed) && !mc_flag.exchange(true, std::memory_order_acquire))
         {
-            mc_tread_id  = std::this_thread::get_id();
+            mc_thread_id = std::this_thread::get_id();
             mu_recursion = 1;
             return true;
         }
 
         // Recursive entry
-        if(std::this_thread::get_id() == mc_tread_id)
+        if(std::this_thread::get_id() == mc_thread_id)
         {
             mu_recursion++;
             return true;
@@ -98,7 +98,7 @@ public:
     /// by setting the atomic flag to false. Asserts if called by a thread that does not own the lock.
     inline void unlock() noexcept
     {
-        if(std::this_thread::get_id() != mc_tread_id)
+        if(std::this_thread::get_id() != mc_thread_id)
         {
             assert("Thread ID missmatch");
         }
@@ -108,7 +108,7 @@ public:
             mc_flag.store(false, std::memory_order_release);
         }
 
-        mc_tread_id = std::thread::id();
+        mc_thread_id = std::thread::id();
     }
 };
 }

@@ -8,7 +8,7 @@ _"Indeed, the ratio of time spent reading versus writing is well over 10 to 1. W
 
 * Objective #1: Code must be easy to read
 * Objective #2: Code must be acceptably comfortable to write
-* Objective #3: consistant rules
+* Objective #3: consistent rules
 
 # Code style
 ## General
@@ -30,8 +30,8 @@ Different pattern were compared from *Objective #1* standpoint of view to choose
 Each variable or type **must** have prefix, separated from name with standard delimeter **_**, see chapter [Examples](#Examples) below.
 
 ### Types
-Each declared type **must** has one of the prefixes:
-  * s - signed integer
+Each declared type **must** have one of the prefixes:
+  * i - signed integer
   * u - unsigned integer
   * x - utf char
   * z - size_t
@@ -46,7 +46,7 @@ Each declared type **must** has one of the prefixes:
   * s - structure
   * e - enum type or enum values
   * t - template
-  * f - function pointer, lambda
+  * l - function pointer, lambda
 
 ### Variables
 Variable prefix must consist of access rights/visibility, one of the following:
@@ -63,8 +63,10 @@ Variable prefix must consist of access rights/visibility, one of the following:
 
 and followed by type from chapter above, see chapter [Examples](#Examples) below.
 
+> Note: `o` as type prefix (object) always appears **second** in a compound prefix; `o` as access prefix (output) always appears **first**. Example: `lo_data` = local object, `oc_data` = output class.
+
 ## Functions
- * C++ class funcstion: fisrt word (prefix) is verb, `do_somethings`
+ * C++ class function: first word (prefix) is verb, `do_something`
  * C functions: first word (prefix) is module name `mymodule_do_something`
 
 ## Preprocessor defines
@@ -91,7 +93,7 @@ struct s_my_struct
 };
 
 //global variable
-const static s_my_struct gs_my_global_val = {0, 0};
+static const s_my_struct gs_my_global_val = {0, 0};
 
 //Class
 class c_my_class

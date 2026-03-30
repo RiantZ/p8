@@ -1,5 +1,5 @@
 add_library(p8 STATIC
-            "${P8_API}/p8clientApi.h"
+            "${P8_API}/p8_client_api.h"
             p8client.cpp
             )
 

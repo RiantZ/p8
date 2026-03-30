@@ -1,5 +1,5 @@
 #include "list.hpp"
 
-void mm()
+void p8client_mm()
 {
 }

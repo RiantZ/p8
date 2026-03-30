@@ -55,9 +55,9 @@ public:
     /// @return Copy of the iterator before incrementing
     c_lst_const_it operator++(int) noexcept
     {
-        c_lst_const_it l_Tmp = *this;
-        mp_iter              = mp_iter->mp_next;
-        return l_Tmp;
+        c_lst_const_it lc_tmp = *this;
+        mp_iter               = mp_iter->mp_next;
+        return lc_tmp;
     }
 
     /// @brief Pre-increment operator, advances to the next element
@@ -88,9 +88,9 @@ public:
     /// @return Copy of the iterator before decrementing
     c_lst_const_it operator--(int) noexcept
     {
-        c_lst_const_it l_Tmp = *this;
-        mp_iter              = mp_iter->mp_prev;
-        return l_Tmp;
+        c_lst_const_it lc_tmp = *this;
+        mp_iter               = mp_iter->mp_prev;
+        return lc_tmp;
     }
 
     /// @brief Pre-decrement operator, moves to the previous element
@@ -119,8 +119,8 @@ protected:
 public:
     /// @brief Constructs the iterator with a given node
     /// @param it_node Pointer to the list node
-    c_lst_it(tp_node i_node) noexcept
-        : mp_iter(i_node)
+    c_lst_it(tp_node it_node) noexcept
+        : mp_iter(it_node)
     {
     }
 
@@ -134,9 +134,9 @@ public:
     /// @return Copy of the iterator before incrementing
     c_lst_it operator++(int) noexcept
     {
-        c_lst_it l_Tmp = *this;
-        mp_iter        = mp_iter->mp_next;
-        return l_Tmp;
+        c_lst_it lc_tmp = *this;
+        mp_iter         = mp_iter->mp_next;
+        return lc_tmp;
     }
 
     /// @brief Pre-increment operator, advances to the next element
@@ -151,9 +151,9 @@ public:
     /// @return Copy of the iterator before decrementing
     c_lst_it operator--(int) noexcept
     {
-        c_lst_it l_Tmp = *this;
-        mp_iter        = mp_iter->mp_prev;
-        return l_Tmp;
+        c_lst_it lc_tmp = *this;
+        mp_iter         = mp_iter->mp_prev;
+        return lc_tmp;
     }
 
     /// @brief Pre-decrement operator, moves to the previous element
@@ -214,20 +214,20 @@ protected:
 
 private:
     /// @brief Structure representing a segment of memory pool for nodes
-    struct stPoolBlock
+    struct s_pool_block
     {
-        s_item      *mp_Cells; ///< Array of nodes in this segment
-        size_t       mz_Count; ///< Number of nodes in this segment
-        stPoolBlock *mp_next;  ///< Pointer to the next pool segment
+        s_item       *mp_cells; ///< Array of nodes in this segment
+        size_t        mz_count; ///< Number of nodes in this segment
+        s_pool_block *mp_next;  ///< Pointer to the next pool segment
     };
 
-    stPoolBlock *mp_pool_head;
-    s_item      *mp_pool_item_first;
-    size_t       mz_pool_size;
-    size_t       mz_count;
-    s_item       mo_null_item;
-    s_item      *mp_first;
-    s_item      *mp_last;
+    s_pool_block *mp_pool_head;
+    s_item       *mp_pool_item_first;
+    size_t        mz_pool_size;
+    size_t        mz_count;
+    s_item        mo_null_item;
+    s_item       *mp_first;
+    s_item       *mp_last;
 
     using t_pointer         = t_lst_value_type *;
     using t_const_pointer   = const t_lst_value_type *;
@@ -268,12 +268,27 @@ public:
     /// @param ir_other The list to move from
     c_lst(c_lst &&iv_other) noexcept
     {
-        mp_pool_head                  = iv_other.mp_pool_head;
-        mp_pool_item_first            = iv_other.mp_pool_item_first;
-        mz_pool_size                  = iv_other.mz_pool_size;
-        mz_count                      = iv_other.mz_count;
-        mp_first                      = iv_other.mp_first;
-        mp_last                       = iv_other.mp_last;
+        mp_pool_head       = iv_other.mp_pool_head;
+        mp_pool_item_first = iv_other.mp_pool_item_first;
+        mz_pool_size       = iv_other.mz_pool_size;
+        mz_count           = iv_other.mz_count;
+
+        if(iv_other.mz_count == 0)
+        {
+            mp_first             = &mo_null_item;
+            mp_last              = &mo_null_item;
+            mo_null_item.mp_next = nullptr;
+            mo_null_item.mp_prev = nullptr;
+        }
+        else
+        {
+            mp_first             = iv_other.mp_first;
+            mp_last              = iv_other.mp_last;
+            mp_first->mp_prev    = &mo_null_item;
+            mp_last->mp_next     = &mo_null_item;
+            mo_null_item.mp_next = mp_first;
+            mo_null_item.mp_prev = mp_last;
+        }
 
         iv_other.mp_pool_head         = nullptr;
         iv_other.mp_pool_item_first   = nullptr;
@@ -314,13 +329,13 @@ public:
     /// @brief Destructor, cleans up allocated memory
     virtual ~c_lst()
     {
-        stPoolBlock *l_pPool_Tmp = nullptr;
+        s_pool_block *lp_pool_tmp = nullptr;
         while(mp_pool_head)
         {
-            l_pPool_Tmp  = mp_pool_head;
+            lp_pool_tmp  = mp_pool_head;
             mp_pool_head = mp_pool_head->mp_next;
 
-            free_pool_block(l_pPool_Tmp);
+            free_pool_block(lp_pool_tmp);
         }
 
         mp_pool_head       = nullptr;
@@ -334,7 +349,7 @@ public:
     /// @return Const reference to the first element's data
     inline t_const_reference front() const noexcept
     {
-        assert(("Empty list!", mz_count != 0));
+        assert(mz_count != 0 && "Empty list!");
 
         return mp_first->mp_data;
     }
@@ -343,7 +358,7 @@ public:
     /// @return Reference to the first element's data
     inline t_reference front() noexcept
     {
-        assert(("Empty list!", mz_count != 0));
+        assert(mz_count != 0 && "Empty list!");
 
         return mp_first->mp_data;
     }
@@ -352,7 +367,7 @@ public:
     /// @return Const reference to the last element's data
     inline t_const_reference back() const noexcept
     {
-        assert(("Empty list!", mz_count != 0));
+        assert(mz_count != 0 && "Empty list!");
 
         return mp_last->mp_data;
     }
@@ -361,7 +376,7 @@ public:
     /// @return Reference to the last element's data
     inline t_reference back() noexcept
     {
-        assert(("Empty list!", mz_count != 0));
+        assert(mz_count != 0 && "Empty list!");
 
         return mp_last->mp_data;
     }
@@ -398,11 +413,11 @@ public:
     /// @return The data from the first element
     inline t_lst_value_type pull_first()
     {
-        assert(("Empty list!", mz_count != 0));
+        assert(mz_count != 0 && "Empty list!");
 
-        t_reference l_pReturn = mp_first->mp_data;
+        t_reference lr_return = mp_first->mp_data;
 
-        s_item *l_pCell       = mp_first;
+        s_item *lp_cell       = mp_first;
 
         if(mp_first == mp_last)
         {
@@ -418,20 +433,20 @@ public:
             mo_null_item.mp_next = mp_first;
         }
 
-        free_item(l_pCell);
+        free_item(lp_cell);
         --mz_count;
-        return std::move(l_pReturn);
+        return std::move(lr_return);
     }
 
     /// @brief Removes and returns the last element from the list
     /// @return The data from the last element
     inline t_lst_value_type pull_last()
     {
-        assert(("Empty list!", mz_count != 0));
+        assert(mz_count != 0 && "Empty list!");
 
-        t_reference l_pReturn = mp_last->mp_data;
+        t_reference lr_return = mp_last->mp_data;
 
-        s_item *l_pCell       = mp_last;
+        s_item *lp_cell       = mp_last;
 
         if(mp_first == mp_last)
         {
@@ -447,37 +462,37 @@ public:
             mo_null_item.mp_prev = mp_last;
         }
 
-        free_item(l_pCell);
+        free_item(lp_cell);
         --mz_count;
-        return std::move(l_pReturn);
+        return std::move(lr_return);
     }
 
     /// @brief Adds a new element to the end of the list using move semantics
     /// @param iv_data The data to move into the list
     inline void push_last(t_lst_value_type &&iv_data)
     {
-        s_item *l_pNew_Cell = allocate_item();
+        s_item *lp_new_cell = allocate_item();
 
-        assert(("Allocation failed!", l_pNew_Cell != nullptr));
+        assert(lp_new_cell != nullptr && "Allocation failed!");
 
-        l_pNew_Cell->mp_data = std::move(iv_data);
+        lp_new_cell->mp_data = std::move(iv_data);
 
         if(mp_last != &mo_null_item)
         {
-            mp_last->mp_next     = l_pNew_Cell;
-            l_pNew_Cell->mp_prev = mp_last;
-            l_pNew_Cell->mp_next = &mo_null_item;
-            mo_null_item.mp_prev = l_pNew_Cell;
-            mp_last              = l_pNew_Cell;
+            mp_last->mp_next     = lp_new_cell;
+            lp_new_cell->mp_prev = mp_last;
+            lp_new_cell->mp_next = &mo_null_item;
+            mo_null_item.mp_prev = lp_new_cell;
+            mp_last              = lp_new_cell;
         }
         else
         {
-            mp_first             = l_pNew_Cell;
-            mp_last              = l_pNew_Cell;
-            l_pNew_Cell->mp_next = &mo_null_item;
-            l_pNew_Cell->mp_prev = &mo_null_item;
-            mo_null_item.mp_next = l_pNew_Cell;
-            mo_null_item.mp_prev = l_pNew_Cell;
+            mp_first             = lp_new_cell;
+            mp_last              = lp_new_cell;
+            lp_new_cell->mp_next = &mo_null_item;
+            lp_new_cell->mp_prev = &mo_null_item;
+            mo_null_item.mp_next = lp_new_cell;
+            mo_null_item.mp_prev = lp_new_cell;
         }
 
         mz_count++;
@@ -487,28 +502,28 @@ public:
     /// @param iv_data The data to add
     inline void push_last(const t_lst_value_type &ir_data)
     {
-        s_item *l_pNew_Cell = allocate_item();
+        s_item *lp_new_cell = allocate_item();
 
-        assert(("Allocation failed!", l_pNew_Cell != nullptr));
+        assert(lp_new_cell != nullptr && "Allocation failed!");
 
-        l_pNew_Cell->mp_data = ir_data;
+        lp_new_cell->mp_data = ir_data;
 
         if(mp_last != &mo_null_item)
         {
-            mp_last->mp_next     = l_pNew_Cell;
-            l_pNew_Cell->mp_prev = mp_last;
-            l_pNew_Cell->mp_next = &mo_null_item;
-            mo_null_item.mp_prev = l_pNew_Cell;
-            mp_last              = l_pNew_Cell;
+            mp_last->mp_next     = lp_new_cell;
+            lp_new_cell->mp_prev = mp_last;
+            lp_new_cell->mp_next = &mo_null_item;
+            mo_null_item.mp_prev = lp_new_cell;
+            mp_last              = lp_new_cell;
         }
         else
         {
-            mp_first             = l_pNew_Cell;
-            mp_last              = l_pNew_Cell;
-            l_pNew_Cell->mp_next = &mo_null_item;
-            l_pNew_Cell->mp_prev = &mo_null_item;
-            mo_null_item.mp_next = l_pNew_Cell;
-            mo_null_item.mp_prev = l_pNew_Cell;
+            mp_first             = lp_new_cell;
+            mp_last              = lp_new_cell;
+            lp_new_cell->mp_next = &mo_null_item;
+            lp_new_cell->mp_prev = &mo_null_item;
+            mo_null_item.mp_next = lp_new_cell;
+            mo_null_item.mp_prev = lp_new_cell;
         }
 
         mz_count++;
@@ -518,28 +533,28 @@ public:
     /// @param iv_data The data to add
     inline void push_first(const t_lst_value_type &ir_data)
     {
-        s_item *l_pNew_Cell = allocate_item();
+        s_item *lp_new_cell = allocate_item();
 
-        assert(("Allocation failed!", l_pNew_Cell != nullptr));
+        assert(lp_new_cell != nullptr && "Allocation failed!");
 
-        l_pNew_Cell->mp_data = ir_data;
+        lp_new_cell->mp_data = ir_data;
 
         if(mp_first != &mo_null_item)
         {
-            mp_first->mp_prev    = l_pNew_Cell;
-            l_pNew_Cell->mp_next = mp_first;
-            l_pNew_Cell->mp_prev = &mo_null_item;
-            mo_null_item.mp_next = l_pNew_Cell;
-            mp_first             = l_pNew_Cell;
+            mp_first->mp_prev    = lp_new_cell;
+            lp_new_cell->mp_next = mp_first;
+            lp_new_cell->mp_prev = &mo_null_item;
+            mo_null_item.mp_next = lp_new_cell;
+            mp_first             = lp_new_cell;
         }
         else
         {
-            mp_first             = l_pNew_Cell;
-            mp_last              = l_pNew_Cell;
-            l_pNew_Cell->mp_next = &mo_null_item;
-            l_pNew_Cell->mp_prev = &mo_null_item;
-            mo_null_item.mp_next = l_pNew_Cell;
-            mo_null_item.mp_prev = l_pNew_Cell;
+            mp_first             = lp_new_cell;
+            mp_last              = lp_new_cell;
+            lp_new_cell->mp_next = &mo_null_item;
+            lp_new_cell->mp_prev = &mo_null_item;
+            mo_null_item.mp_next = lp_new_cell;
+            mo_null_item.mp_prev = lp_new_cell;
         }
 
         mz_count++;
@@ -549,28 +564,28 @@ public:
     /// @param iv_data The data to move into the list
     inline void push_first(t_lst_value_type &&ir_data)
     {
-        s_item *l_pNew_Cell = allocate_item();
+        s_item *lp_new_cell = allocate_item();
 
-        assert(("Allocation failed!", l_pNew_Cell != nullptr));
+        assert(lp_new_cell != nullptr && "Allocation failed!");
 
-        l_pNew_Cell->mp_data = std::move(ir_data);
+        lp_new_cell->mp_data = std::move(ir_data);
 
         if(mp_first != &mo_null_item)
         {
-            mp_first->mp_prev    = l_pNew_Cell;
-            l_pNew_Cell->mp_next = mp_first;
-            l_pNew_Cell->mp_prev = &mo_null_item;
-            mo_null_item.mp_next = l_pNew_Cell;
-            mp_first             = l_pNew_Cell;
+            mp_first->mp_prev    = lp_new_cell;
+            lp_new_cell->mp_next = mp_first;
+            lp_new_cell->mp_prev = &mo_null_item;
+            mo_null_item.mp_next = lp_new_cell;
+            mp_first             = lp_new_cell;
         }
         else
         {
-            mp_first             = l_pNew_Cell;
-            mp_last              = l_pNew_Cell;
-            l_pNew_Cell->mp_next = &mo_null_item;
-            l_pNew_Cell->mp_prev = &mo_null_item;
-            mo_null_item.mp_next = l_pNew_Cell;
-            mo_null_item.mp_prev = l_pNew_Cell;
+            mp_first             = lp_new_cell;
+            mp_last              = lp_new_cell;
+            lp_new_cell->mp_next = &mo_null_item;
+            lp_new_cell->mp_prev = &mo_null_item;
+            mo_null_item.mp_next = lp_new_cell;
+            mo_null_item.mp_prev = lp_new_cell;
         }
 
         mz_count++;
@@ -578,28 +593,28 @@ public:
 
     /// @brief Removes all elements from the list and applies a cleanup function to each
     /// @param if_callback Lambda function to handle resource cleanup for each element's data
-    template <class tlFn> inline void clear(tlFn if_callback)
+    template <class tlFn> inline void clear(tlFn il_callback)
     {
         while(&mo_null_item != mp_first)
         {
-            s_item *l_pCell = mp_first;
+            s_item *lp_cell = mp_first;
             mp_first        = mp_first->mp_next;
-            if_callback(l_pCell->mp_data);
-            free_item(l_pCell);
+            il_callback(lp_cell->mp_data);
+            free_item(lp_cell);
         }
 
-        mp_first                 = &mo_null_item;
-        mp_last                  = &mo_null_item;
-        mz_count                 = 0;
+        mp_first                  = &mo_null_item;
+        mp_last                   = &mo_null_item;
+        mz_count                  = 0;
 
         // remove all segments, expect last one
-        stPoolBlock *l_pPool_Tmp = nullptr;
+        s_pool_block *lp_pool_tmp = nullptr;
         while((mp_pool_head) && (mp_pool_head->mp_next))
         {
-            l_pPool_Tmp  = mp_pool_head;
+            lp_pool_tmp  = mp_pool_head;
             mp_pool_head = mp_pool_head->mp_next;
 
-            free_pool_block(l_pPool_Tmp);
+            free_pool_block(lp_pool_tmp);
         }
     }
 
@@ -608,23 +623,23 @@ public:
     {
         while(&mo_null_item != mp_first)
         {
-            s_item *l_pCell = mp_first;
+            s_item *lp_cell = mp_first;
             mp_first        = mp_first->mp_next;
-            free_item(l_pCell);
+            free_item(lp_cell);
         }
 
-        mp_first                 = &mo_null_item;
-        mp_last                  = &mo_null_item;
-        mz_count                 = 0;
+        mp_first                  = &mo_null_item;
+        mp_last                   = &mo_null_item;
+        mz_count                  = 0;
 
         // remove all segments, expect last one
-        stPoolBlock *l_pPool_Tmp = nullptr;
+        s_pool_block *lp_pool_tmp = nullptr;
         while((mp_pool_head) && (mp_pool_head->mp_next))
         {
-            l_pPool_Tmp  = mp_pool_head;
+            lp_pool_tmp  = mp_pool_head;
             mp_pool_head = mp_pool_head->mp_next;
 
-            free_pool_block(l_pPool_Tmp);
+            free_pool_block(lp_pool_tmp);
         }
     }
 
@@ -639,11 +654,11 @@ public:
     /// @param ir_it Iterator pointing to the element to remove
     /// @param if_callback Lambda function to handle resource cleanup for the element's data
     /// @return Iterator pointing to the next element after removal
-    template <class tlFn> inline t_iterator remove(const t_iterator &ir_it, tlFn if_callback)
+    template <class tlFn> inline t_iterator remove(const t_iterator &ir_it, tlFn il_callback)
     {
         if(ir_it.mp_iter != &mo_null_item)
         {
-            if_callback(ir_it.mp_iter->mp_data);
+            il_callback(ir_it.mp_iter->mp_data);
         }
         return remove(ir_it);
     }
@@ -658,27 +673,27 @@ public:
             return t_iterator(&mo_null_item);
         }
 
-        s_item *l_pCell           = ir_it.mp_iter;
-        s_item *l_pNext           = l_pCell->mp_next;
+        s_item *lp_cell           = ir_it.mp_iter;
+        s_item *lp_next           = lp_cell->mp_next;
 
-        l_pCell->mp_prev->mp_next = l_pCell->mp_next;
-        l_pCell->mp_next->mp_prev = l_pCell->mp_prev;
+        lp_cell->mp_prev->mp_next = lp_cell->mp_next;
+        lp_cell->mp_next->mp_prev = lp_cell->mp_prev;
 
-        if(l_pCell == mp_first)
+        if(lp_cell == mp_first)
         {
-            mp_first = l_pCell->mp_next;
+            mp_first = lp_cell->mp_next;
         }
 
-        if(l_pCell == mp_last)
+        if(lp_cell == mp_last)
         {
-            mp_last = l_pCell->mp_prev;
+            mp_last = lp_cell->mp_prev;
         }
 
-        free_item(l_pCell);
+        free_item(lp_cell);
 
         mz_count--;
 
-        return t_iterator(l_pNext);
+        return t_iterator(lp_next);
     }
 
     /// @brief Inserts a new element after the specified iterator position using move semantics
@@ -687,32 +702,32 @@ public:
     /// @return Iterator pointing to the newly inserted element
     inline t_iterator push_next(const t_iterator &ir_it, t_lst_value_type &&iv_data)
     {
-        s_item *l_pNew_Cell = allocate_item();
+        s_item *lp_new_cell = allocate_item();
 
-        if((!l_pNew_Cell) || (ir_it.mp_iter == &mo_null_item))
+        if((!lp_new_cell) || (ir_it.mp_iter == &mo_null_item))
         {
             return t_iterator(&mo_null_item);
         }
 
-        s_item *l_pCur_Cell = ir_it.mp_iter;
+        s_item *lp_cur_cell = ir_it.mp_iter;
 
         mz_count++;
-        l_pNew_Cell->mp_data = std::move(iv_data);
+        lp_new_cell->mp_data = std::move(iv_data);
 
-        if(l_pCur_Cell)
+        if(lp_cur_cell)
         {
-            l_pNew_Cell->mp_next          = l_pCur_Cell->mp_next;
-            l_pNew_Cell->mp_prev          = l_pCur_Cell;
-            l_pCur_Cell->mp_next->mp_prev = l_pNew_Cell;
-            l_pCur_Cell->mp_next          = l_pNew_Cell;
+            lp_new_cell->mp_next          = lp_cur_cell->mp_next;
+            lp_new_cell->mp_prev          = lp_cur_cell;
+            lp_cur_cell->mp_next->mp_prev = lp_new_cell;
+            lp_cur_cell->mp_next          = lp_new_cell;
         }
 
-        if(mp_last == l_pCur_Cell)
+        if(mp_last == lp_cur_cell)
         {
-            mp_last = l_pNew_Cell;
+            mp_last = lp_new_cell;
         }
 
-        return t_iterator(l_pNew_Cell);
+        return t_iterator(lp_new_cell);
     }
 
     /// @brief Inserts a new element after the specified iterator position
@@ -721,32 +736,32 @@ public:
     /// @return Iterator pointing to the newly inserted element
     inline t_iterator push_next(const t_iterator &ir_it, const t_lst_value_type &ir_data)
     {
-        s_item *l_pNew_Cell = allocate_item();
+        s_item *lp_new_cell = allocate_item();
 
-        if((!l_pNew_Cell) || (ir_it.mp_iter == &mo_null_item))
+        if((!lp_new_cell) || (ir_it.mp_iter == &mo_null_item))
         {
             return t_iterator(&mo_null_item);
         }
 
-        s_item *l_pCur_Cell = ir_it.mp_iter;
+        s_item *lp_cur_cell = ir_it.mp_iter;
 
         mz_count++;
-        l_pNew_Cell->mp_data = ir_data;
+        lp_new_cell->mp_data = ir_data;
 
-        if(l_pCur_Cell)
+        if(lp_cur_cell)
         {
-            l_pNew_Cell->mp_next          = l_pCur_Cell->mp_next;
-            l_pNew_Cell->mp_prev          = l_pCur_Cell;
-            l_pCur_Cell->mp_next->mp_prev = l_pNew_Cell;
-            l_pCur_Cell->mp_next          = l_pNew_Cell;
+            lp_new_cell->mp_next          = lp_cur_cell->mp_next;
+            lp_new_cell->mp_prev          = lp_cur_cell;
+            lp_cur_cell->mp_next->mp_prev = lp_new_cell;
+            lp_cur_cell->mp_next          = lp_new_cell;
         }
 
-        if(mp_last == l_pCur_Cell)
+        if(mp_last == lp_cur_cell)
         {
-            mp_last = l_pNew_Cell;
+            mp_last = lp_new_cell;
         }
 
-        return t_iterator(l_pNew_Cell);
+        return t_iterator(lp_new_cell);
     }
 
 private:
@@ -754,57 +769,57 @@ private:
     /// @return True if allocation succeeded
     bool allocate_pool_block()
     {
-        bool         l_bReturn = false;
-        stPoolBlock *l_pPool   = (stPoolBlock *)malloc(sizeof(stPoolBlock));
+        bool          lb_return = false;
+        s_pool_block *lp_pool   = (s_pool_block *)malloc(sizeof(s_pool_block));
 
-        if(l_pPool)
+        if(lp_pool)
         {
-            memset(l_pPool, 0, sizeof(stPoolBlock));
-            l_pPool->mz_Count = mz_pool_size;
-            l_pPool->mp_Cells = (s_item *)malloc(sizeof(s_item) * l_pPool->mz_Count);
+            memset(lp_pool, 0, sizeof(s_pool_block));
+            lp_pool->mz_count = mz_pool_size;
+            lp_pool->mp_cells = (s_item *)malloc(sizeof(s_item) * lp_pool->mz_count);
 
-            if(l_pPool->mp_Cells)
+            if(lp_pool->mp_cells)
             {
-                s_item *l_pCell = nullptr;
+                s_item *lp_cell = nullptr;
 
-                memset(l_pPool->mp_Cells, 0, sizeof(s_item) * l_pPool->mz_Count);
+                memset(lp_pool->mp_cells, 0, sizeof(s_item) * lp_pool->mz_count);
 
-                l_pCell = l_pPool->mp_Cells;
+                lp_cell = lp_pool->mp_cells;
 
-                for(uint32_t l_dwIDX = 1; l_dwIDX < l_pPool->mz_Count; l_dwIDX++)
+                for(uint32_t lu_idx = 1; lu_idx < lp_pool->mz_count; lu_idx++)
                 {
-                    l_pCell->mp_next = (l_pCell + 1);
-                    l_pCell++;
+                    lp_cell->mp_next = (lp_cell + 1);
+                    lp_cell++;
                 }
 
-                l_bReturn          = true;
-                l_pPool->mp_next   = mp_pool_head;
-                mp_pool_head       = l_pPool;
-                l_pCell->mp_next   = mp_pool_item_first;
-                mp_pool_item_first = l_pPool->mp_Cells;
+                lb_return          = true;
+                lp_pool->mp_next   = mp_pool_head;
+                mp_pool_head       = lp_pool;
+                lp_cell->mp_next   = mp_pool_item_first;
+                mp_pool_item_first = lp_pool->mp_cells;
             }
         }
 
-        if(false == l_bReturn)
+        if(false == lb_return)
         {
-            free_pool_block(l_pPool);
+            free_pool_block(lp_pool);
         }
 
-        return l_bReturn;
+        return lb_return;
     }
 
     /// @brief Releases memory for a pool segment
     /// @param iop_Pool Pointer to the pool segment to free
-    void free_pool_block(stPoolBlock *iop_Pool)
+    void free_pool_block(s_pool_block *iop_pool)
     {
-        if(iop_Pool)
+        if(iop_pool)
         {
-            if(iop_Pool->mp_Cells)
+            if(iop_pool->mp_cells)
             {
-                free(iop_Pool->mp_Cells);
-                iop_Pool->mp_Cells = nullptr;
+                free(iop_pool->mp_cells);
+                iop_pool->mp_cells = nullptr;
             }
-            free(iop_Pool);
+            free(iop_pool);
         }
     }
 
@@ -812,29 +827,29 @@ private:
     /// @return Pointer to the allocated cell
     s_item *allocate_item()
     {
-        s_item *l_pReturn = nullptr;
+        s_item *lp_return = nullptr;
         if(nullptr == mp_pool_item_first)
         {
             allocate_pool_block();
         }
 
-        l_pReturn = mp_pool_item_first;
+        lp_return = mp_pool_item_first;
 
         if(mp_pool_item_first)
         {
             mp_pool_item_first = mp_pool_item_first->mp_next;
         }
 
-        return l_pReturn;
+        return lp_return;
     }
 
     /// @brief Returns a cell back to the memory pool
     /// @param i_pCell Pointer to the cell to free
-    void free_item(s_item *i_pCell)
+    void free_item(s_item *ip_cell)
     {
-        i_pCell->mp_prev   = nullptr;
-        i_pCell->mp_next   = mp_pool_item_first;
-        mp_pool_item_first = i_pCell;
+        ip_cell->mp_prev   = nullptr;
+        ip_cell->mp_next   = mp_pool_item_first;
+        mp_pool_item_first = ip_cell;
     }
 };
 }
