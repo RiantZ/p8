@@ -84,10 +84,15 @@ def get_git_staged_files() -> list[Path]:
         # T (Type)
         # M (Modified)
         # A (Added)
-        # R (Renamed)
-        # C (Copied)
-        # ?? (Unknown)
+        # R (Renamed)  - porcelain=1 reports path as "old -> new", use new path only
+        # C (Copied)   - same "old -> new" format as R
+        # D (Deleted)  - file no longer exists, skip
+        # ?? (Untracked)
+        if status == "D":
+            continue
         if re.match(r"^(T|M|A|R|C|\?\?)$", status):
+            if " -> " in path:
+                path = path.split(" -> ", 1)[1]
             full_path = git_project_root_path / path
             if full_path.suffix in INLCUDE_EXTENSIONS and not is_path_excluded(
                 full_path
