@@ -200,7 +200,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if not args.check and not args.apply:
+    if not args.check and not args.format:
         print("Error: Please use --format or --apply options")
         sys.exit(1)
 
@@ -216,7 +216,7 @@ def main() -> None:
     success = False
     if args.check:
         success = check_formatting(files, CLANG_FORMAT_FILE_PATH)
-    elif args.apply:
+    elif args.format:
         success = apply_formatting(files, CLANG_FORMAT_FILE_PATH)
 
     if not success:
