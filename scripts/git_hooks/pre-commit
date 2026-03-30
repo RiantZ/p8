@@ -1,5 +1,11 @@
 #!/bin/sh
 
+# Extend PATH to include Homebrew locations that may be missing
+# when the hook is run from a GUI application (e.g. Cursor, VS Code)
+if [ "$(uname)" = "Darwin" ]; then
+    export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$PATH"
+fi
+
 if command -v python3 >/dev/null 2>&1; then
     PYTHON=python3
 elif command -v python >/dev/null 2>&1; then
