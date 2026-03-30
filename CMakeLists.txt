@@ -86,10 +86,10 @@ else()
     SET(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/_Build_)
 endif()
 
+enable_testing()
+
 add_subdirectory(doc)
 add_subdirectory(api)
 add_subdirectory(dep)
 add_subdirectory(engine)
 add_subdirectory(tests/regression)
-
-enable_testing()
