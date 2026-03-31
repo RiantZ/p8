@@ -229,6 +229,8 @@ bool p8_log_sent_emb(enum e_p8_level ie_level,
 //                                         P8::Trace structures & functions                                      //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// TODO: add condition MACRO to switch off traces
+
 /// @brief Start a trace
 #define P8TRC_BEGIN(iu_parent_id, iz_attrs, ip_attrs, ip_fmt, ...)                                                    \
     p8_trc_begin((iu_parent_id),                                                                                      \
@@ -270,24 +272,24 @@ bool p8_trc_end(uint64_t iu_trace_id);
 #ifdef __cplusplus
     /// @brief Declare a named cp8_trace_guard with structured attributes.
     #define P8TRC_SCOPE(var_name, iu_parent_id, iz_attrs, ip_attrs, ip_fmt, ...)                                      \
-        cp8_trace_guard var_name((iu_parent_id),                                                                      \
-                                 (uint32_t)__LINE__,                                                                  \
-                                 __FILE__,                                                                            \
-                                 __FUNCTION__,                                                                        \
-                                 (iz_attrs),                                                                          \
-                                 (ip_attrs),                                                                          \
-                                 (ip_fmt),                                                                            \
-                                 ##__VA_ARGS__)
+        cp8_trace var_name((iu_parent_id),                                                                            \
+                           (uint32_t)__LINE__,                                                                        \
+                           __FILE__,                                                                                  \
+                           __FUNCTION__,                                                                              \
+                           (iz_attrs),                                                                                \
+                           (ip_attrs),                                                                                \
+                           (ip_fmt),                                                                                  \
+                           ##__VA_ARGS__)
 
     /// @brief Declare a named cp8_trace_guard with structured attributes.
     #define P8TRC(var_name, iu_parent_id, iz_attrs, ip_attrs)                                                         \
-        cp8_trace_guard var_name((iu_parent_id), (uint32_t)__LINE__, __FILE__, __FUNCTION__, (iz_attrs), (ip_attrs), )
+        cp8_trace var_name((iu_parent_id), (uint32_t)__LINE__, __FILE__, __FUNCTION__, (iz_attrs), (ip_attrs), )
 
 /// @brief RAII guard that calls p8_trc_begin on construction and p8_trc_end on destruction.
 /// Stores the assigned trace ID so it can be forwarded to p8_log_sent for span correlation.
 /// Designed for zero overhead beyond the two underlying C calls — no virtual dispatch,
 /// no heap allocation, no exceptions.
-class cp8_trace_guard final
+class cp8_trace final
 {
 public:
     explicit cp8_trace(uint64_t      iu_parent_trace_id,
