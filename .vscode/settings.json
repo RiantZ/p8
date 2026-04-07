@@ -1,0 +1,21 @@
+{
+    "python.defaultInterpreterPath": "python3",
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestPath": "pytest",
+    "python-envs.defaultEnvManager": "ms-python.python:pyenv",
+    "python-envs.pythonProjects": [],
+    // ── C / C++ auto-format on save via clang-format ──────────────────────────
+    // Requires the "clangd" extension (llvm-vs-code-extensions.vscode-clangd).
+    // clangd automatically picks up .clang-format from the workspace root.
+    // If you use ms-vscode.cpptools instead, replace the defaultFormatter values
+    // with "ms-vscode.cpptools" — the C_Cpp.* keys below handle that case too.
+    "[c]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "editor.formatOnSave": true
+    },
+    "[cpp]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "editor.formatOnSave": true
+    },
+    "clang-format.executable": "clang-format"
+}
