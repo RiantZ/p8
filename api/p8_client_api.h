@@ -65,12 +65,12 @@ class cp8_thread final
 public:
     explicit cp8_thread(const char *ip_name) noexcept
     {
-        p8_log_register_current_thread(ip_name);
+        p8_register_current_thread(ip_name);
     }
 
     ~cp8_thread() noexcept
     {
-        p8_log_unregister_current_thread();
+        p8_unregister_current_thread();
     }
 
     cp8_thread(const cp8_thread &)            = delete;
