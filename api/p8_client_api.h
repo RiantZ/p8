@@ -46,6 +46,40 @@ bool p8_get_initialized();
 /// N.B.: DO NOT USE OTHER P8 FUNCTION AFTER CALLING OF THIS FUNCTION
 void p8_exceptional_flush();
 
+/// @brief function used to specify name for current thread, allows to have nice log/trace message formatting on Baical
+/// server. Call the function from the newly created thread & call p8_trc_unregister_current_thread() right before
+/// thread destroying
+/// @param ip_name [in] thread name
+/// @return true - successful registration, false - failure
+bool p8_register_current_thread(const char *ip_name);
+
+/// @brief function used to unregister thread name (called on thread exit)
+void p8_unregister_current_thread();
+
+#ifdef __cplusplus
+/// @brief RAII guard that registers the current thread name on construction and unregisters it on
+/// destruction. Designed for zero overhead beyond the two underlying C calls — no virtual
+/// dispatch, no heap allocation, no exceptions.
+class cp8_thread final
+{
+public:
+    explicit cp8_thread(const char *ip_name) noexcept
+    {
+        p8_log_register_current_thread(ip_name);
+    }
+
+    ~cp8_thread() noexcept
+    {
+        p8_log_unregister_current_thread();
+    }
+
+    cp8_thread(const cp8_thread &)            = delete;
+    cp8_thread &operator=(const cp8_thread &) = delete;
+    cp8_thread(cp8_thread &&)                 = delete;
+    cp8_thread &operator=(cp8_thread &&)      = delete;
+};
+#endif // __cplusplus
+
 /// @brief Key-value attribute attached to a log, trace or metric record.
 ///
 /// Both pointers must remain valid and point to null-terminated UTF-8 strings
@@ -122,40 +156,6 @@ typedef void *p_p8_module;
 void p8_log_set_verbosity(p_p8_module ip_module, enum e_p8_level ie_verbosity);
 
 enum e_p8_level p8_log_get_verbosity(p_p8_module ip_module);
-
-/// @brief function used to specify name for current thread, allows to have nice log message formatting on Baical
-/// server. Call the function from the newly created thread & call p8_trc_unregister_current_thread() right before
-/// thread destroying
-/// @param ip_name [in] thread name
-/// @return true - successful registration, false - failure
-bool p8_log_register_current_thread(const char *ip_name);
-
-/// @brief function used to unregister thread name (called on thread exit)
-void p8_log_unregister_current_thread();
-
-#ifdef __cplusplus
-/// @brief RAII guard that registers the current thread name on construction and unregisters it on
-/// destruction. Designed for zero overhead beyond the two underlying C calls — no virtual
-/// dispatch, no heap allocation, no exceptions.
-class cp8_thread final
-{
-public:
-    explicit cp8_thread(const char *ip_name) noexcept
-    {
-        p8_log_register_current_thread(ip_name);
-    }
-
-    ~cp8_thread() noexcept
-    {
-        p8_log_unregister_current_thread();
-    }
-
-    cp8_thread(const cp8_thread &)            = delete;
-    cp8_thread &operator=(const cp8_thread &) = delete;
-    cp8_thread(cp8_thread &&)                 = delete;
-    cp8_thread &operator=(cp8_thread &&)      = delete;
-};
-#endif // __cplusplus
 
 /// @brief function is used to register log module. Modules are used to group log messages by modules, use the same
 ///       verbosity level per module and to have nice formatting on Baical side - each log will be marked with module
@@ -326,21 +326,28 @@ private:
 #endif // __cplusplus
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//                                         P8::Telemetry structures & functions                                      //
+//                                         P8::Metrics structures & functions                                        //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// @brief P8 telemetry ID type
-typedef uint16_t u_p8_tel_id;
+/// @brief P8 Metric ID type
+typedef uint16_t u_p8_mtk_id;
 
 /// @brief Invalid telemetry counter ID
-#define P8_TELEMETRY_INVALID_ID ((u_p8_tel_id) ~((u_p8_tel_id)0))
+#define P8_METRIC_INVALID_ID ((u_p8_mtk_id) ~((u_p8_mtk_id)0))
 
 struct s_metric_attr
 {
+    void       *mp_user_context;
+    const char *mp_name;
+    const char *mp_description;
     const char *mp_unit;
+    const char *mp_type;
     int64_t     mi_min;
     int64_t     mi_max;
+    // callback
 };
+
+// types: (single val, mutlival) / observer + increment + on-off (cyclogram)
 
 /// @brief function to register telemetry counter
 /// @param ip_name [in] counter name
@@ -351,36 +358,38 @@ struct s_metric_attr
 /// @param ib_on [in] default counter state (true - on, false - off), can be changed later in real-time from Baical
 /// @param op_id [out] counter ID
 /// @return true - success, false - failure
-bool p8_tel_create_counter(const char  *ip_name,
-                           double       id_min,
+bool p8_tel_create_counter(const char *ip_name,
+                           double      id_min,
+                           вщгиду шв_ьштб
+
                            double       id_alarm_min,
                            double       id_max,
                            double       id_alarm_max,
                            bool         ib_on,
-                           u_p8_tel_id *op_id);
+                           u_p8_mtk_id *op_id);
 
 /// @brief function to sent counter sample
 /// @param iu_id [in] counter ID
 /// @param id_value [in] sample value
 /// @return true - success, false - failure
-bool p8_tel_sent_sample(u_p8_tel_id iu_id, double id_value);
+bool p8_tel_sent_sample(u_p8_mtk_id iu_id, double id_value);
 
 /// @brief function to find counter ID by name (case sensitive)
 /// @param ip_name [in] counter name
 /// @param op_id [out] counter ID
 /// @return true - success, false - failure
-bool p8_tel_find_counter(const char *ip_name, u_p8_tel_id *op_id);
+bool p8_tel_find_counter(const char *ip_name, u_p8_mtk_id *op_id);
 
 /// @brief function to enable counter
 /// @param iu_id [in] counter ID
-void p8_tel_manage_counter(u_p8_tel_id iu_id, bool ib_enable);
+void p8_tel_manage_counter(u_p8_mtk_id iu_id, bool ib_enable);
 
 /// @brief function to retrieve enable state of the counter
 /// @param iu_id [in] counter ID
 /// @return true - enabled, false - disabled
-bool p8_tel_is_counter_enabled(u_p8_tel_id iu_id);
+bool p8_tel_is_counter_enabled(u_p8_mtk_id iu_id);
 
 /// @brief get counter's name
 /// @param iu_id [in] counter ID
 /// @return name
-const char *p8_tel_get_counter_name(u_p8_tel_id iu_id);
+const char *p8_tel_get_counter_name(u_p8_mtk_id iu_id);
