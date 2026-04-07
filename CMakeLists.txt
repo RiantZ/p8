@@ -2,6 +2,13 @@ cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 
 project(Protocol8)
 
+if(NOT P8_BUILD_SCRIPT)
+    message(FATAL_ERROR
+        "Invoke CMake via the build script:\n"
+        "  python scripts/cmake_build.py [--build] [--clean]"
+    )
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
