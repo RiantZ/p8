@@ -80,15 +80,63 @@ public:
 };
 #endif // __cplusplus
 
-/// @brief Key-value attribute attached to a log, trace or metric record.
-///
-/// Both pointers must remain valid and point to null-terminated UTF-8 strings
-/// for the entire lifetime of the record (i.e. until the log call returns).
-/// Passing string literals is the recommended zero-allocation approach.
-struct s_attr
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                         P8::Attributes                                                            //
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// @brief Supported attribute value types.
+enum e_p8_attr_type
 {
-    const char *mp_name;  ///< Attribute name,  e.g. "user_id". Must not be nullptr.
-    const char *mp_value; ///< Attribute value, e.g. "42".      Must not be nullptr.
+    e_p8_attr_str = 0, ///< Null-terminated UTF-8 string (const char *)
+    e_p8_attr_f64,     ///< IEEE 754 double-precision float
+    e_p8_attr_i64,     ///< Signed 64-bit integer
+    e_p8_attr_u64,     ///< Unsigned 64-bit integer
+};
+
+/// @brief Attribute ID returned by p8_attr_register.
+///
+/// Positive values (> 0) are valid attribute handles.
+/// Negative values indicate a registration error.
+/// Zero is reserved and never returned as a valid ID.
+typedef int32_t p8_attr_id;
+
+/// @brief Sentinel value for an invalid / unregistered attribute.
+// TODO: add error codes
+#define P8_ATTR_INVALID ((p8_attr_id)0)
+
+/// @brief Register a named attribute with a fixed value type.
+///
+/// The name must be unique, non-empty, null-terminated UTF-8.
+/// Once registered, the attribute keeps its type for the process lifetime.
+/// Re-registering the same name + type returns the existing ID.
+/// Re-registering with a different type returns a negative error code.
+///
+/// @param ip_name [in] attribute name, e.g. "user_id". Must not be nullptr.
+/// @param ie_type [in] value type that will accompany every record
+/// @return positive ID on success, negative error code on failure
+p8_attr_id p8_attr_register(const char *ip_name, enum e_p8_attr_type ie_type);
+
+/// @brief Look up a previously registered attribute by name.
+///
+/// @param ip_name [in] attribute name, e.g. "user_id". Must not be nullptr.
+/// @return positive attribute ID if found, P8_ATTR_INVALID (0) if not registered
+p8_attr_id p8_attr_get(const char *ip_name);
+
+/// @brief A single attribute value bound to a registered attribute ID.
+///
+/// Construct instances with p8_av_str / p8_av_f64 / p8_av_i64 / p8_av_u64.
+/// The active union member must match the type declared at registration;
+/// a mismatch is detected at runtime and the record is dropped.
+struct s_p8_attr_val
+{
+    p8_attr_id m_id; ///< ID obtained from p8_attr_register.
+    union
+    {
+        const char *mp_str; ///< Valid when registered as e_p8_attr_str.
+        double      md_f64; ///< Valid when registered as e_p8_attr_f64.
+        int64_t     mi_i64; ///< Valid when registered as e_p8_attr_i64.
+        uint64_t    mu_u64; ///< Valid when registered as e_p8_attr_u64.
+    };
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -181,22 +229,22 @@ p_p8_module p8_log_find_module(const char *ip_name);
 /// @param iu_line [in] source code line index
 /// @param ip_file [in] source code file name
 /// @param ip_function [in] source code function name
+/// @param iz_attrs [in] number of elements in ip_attrs array; pass 0 when no attributes are attached
+/// @param ip_attrs [in] pointer to array of s_p8_attr_val of length iz_attrs; each element must carry
+///                      an ID obtained from p8_attr_register and a value matching the registered type
 /// @param ip_format [in] format string, for format specification please refer to documentation, all standard format
 /// options are supported, and in addition few custom
-/// @param iz_attrs [in] number of elements in ip_attrs array; pass 0 when no attributes are attached
-/// @param ip_attrs [in] pointer to array of s_attr of length iz_attrs; both mp_name and mp_value inside each s_attr
-///                      must not be nullptr and must remain valid until the call returns
 /// @param ... [in] variable arguments list
 /// @return true - success, false - failure
-bool p8_log_sent(enum e_p8_level ie_level,
-                 p_p8_module     ip_module,
-                 uint64_t        iu_trace_id,
-                 uint32_t        iu_line,
-                 const char     *ip_file,
-                 const char     *ip_function,
-                 size_t          iz_attrs,
-                 const s_attr   *ip_attrs,
-                 const char     *ip_format,
+bool p8_log_sent(enum e_p8_level             ie_level,
+                 p_p8_module                 ip_module,
+                 uint64_t                    iu_trace_id,
+                 uint32_t                    iu_line,
+                 const char                 *ip_file,
+                 const char                 *ip_function,
+                 size_t                      iz_attrs,
+                 const struct s_p8_attr_val *ip_attrs,
+                 const char                 *ip_format,
                  ...);
 
 /// @brief Function for internal usage, please use macros P8TRC, P8DBG, etc. instead.
@@ -208,22 +256,22 @@ bool p8_log_sent(enum e_p8_level ie_level,
 /// @param ip_file [in] source code file name
 /// @param ip_function [in] source code function name
 /// @param iz_attrs [in] number of elements in ip_attrs array; pass 0 when no attributes are attached
-/// @param ip_attrs [in] pointer to array of s_attr of length iz_attrs; both mp_name and mp_value inside each s_attr
-///                      must not be nullptr and must remain valid until the call returns
+/// @param ip_attrs [in] pointer to array of s_p8_attr_val of length iz_attrs; each element must carry
+///                      an ID obtained from p8_attr_register and a value matching the registered type
 /// @param ip_format [in] format string address, for format specification please refer to documentation, all standard
 /// format options are supported, and in addition few custom
 /// @param ip_va_list [in] variable arguments list
 /// @return true - success, false - failure
-bool p8_log_sent_emb(enum e_p8_level ie_level,
-                     p_p8_module     ip_module,
-                     uint64_t        iu_trace_id,
-                     uint32_t        iu_line,
-                     const char     *ip_file,
-                     const char     *ip_function,
-                     size_t          iz_attrs,
-                     const s_attr   *ip_attrs,
-                     const char    **ip_format,
-                     va_list        *ip_va_list);
+bool p8_log_sent_emb(enum e_p8_level             ie_level,
+                     p_p8_module                 ip_module,
+                     uint64_t                    iu_trace_id,
+                     uint32_t                    iu_line,
+                     const char                 *ip_file,
+                     const char                 *ip_function,
+                     size_t                      iz_attrs,
+                     const struct s_p8_attr_val *ip_attrs,
+                     const char                **ip_format,
+                     va_list                    *ip_va_list);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                         P8::Trace structures & functions                                      //
@@ -251,17 +299,17 @@ bool p8_log_sent_emb(enum e_p8_level ie_level,
 /// @param ip_file            [in] source code file name
 /// @param ip_function        [in] source code function name
 /// @param iz_attrs           [in] number of elements in ip_attrs; pass 0 when no attributes
-/// @param ip_attrs           [in] array of s_attr of length iz_attrs; may be nullptr when iz_attrs == 0
+/// @param ip_attrs           [in] array of s_p8_attr_val of length iz_attrs; may be nullptr when iz_attrs == 0
 /// @param ip_function_args   [in] printf-style format string describing call arguments; may be nullptr
 /// @param ...                [in] arguments for ip_function_args format string
 /// @return assigned trace ID (non-zero on success, 0 on failure)
-uint64_t p8_trc_begin(uint64_t      iu_parent_trace_id,
-                      uint32_t      iu_line,
-                      const char   *ip_file,
-                      const char   *ip_function,
-                      size_t        iz_attrs,
-                      const s_attr *ip_attrs,
-                      const char   *ip_function_args,
+uint64_t p8_trc_begin(uint64_t                    iu_parent_trace_id,
+                      uint32_t                    iu_line,
+                      const char                 *ip_file,
+                      const char                 *ip_function,
+                      size_t                      iz_attrs,
+                      const struct s_p8_attr_val *ip_attrs,
+                      const char                 *ip_function_args,
                       ...);
 
 /// @brief End a trace span. For internal usage — prefer P8TRC_SCOPE macro (RAII) or P8TRC_END.
@@ -292,13 +340,13 @@ bool p8_trc_end(uint64_t iu_trace_id);
 class cp8_trace final
 {
 public:
-    explicit cp8_trace(uint64_t      iu_parent_trace_id,
-                       uint32_t      iu_line,
-                       const char   *ip_file,
-                       const char   *ip_function,
-                       size_t        iz_attrs         = 0,
-                       const s_attr *ip_attrs         = nullptr,
-                       const char   *ip_function_args = nullptr) noexcept
+    explicit cp8_trace(uint64_t                    iu_parent_trace_id,
+                       uint32_t                    iu_line,
+                       const char                 *ip_file,
+                       const char                 *ip_function,
+                       size_t                      iz_attrs         = 0,
+                       const struct s_p8_attr_val *ip_attrs         = nullptr,
+                       const char                 *ip_function_args = nullptr) noexcept
         : mu_trace_id(
               p8_trc_begin(iu_parent_trace_id, iu_line, ip_file, ip_function, iz_attrs, ip_attrs, ip_function_args))
     {
@@ -330,66 +378,53 @@ private:
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// @brief P8 Metric ID type
-typedef uint16_t u_p8_mtk_id;
+typedef int32_t h_p8_mtk_id;
 
-/// @brief Invalid telemetry counter ID
-#define P8_METRIC_INVALID_ID ((u_p8_mtk_id) ~((u_p8_mtk_id)0))
+/// @brief P8 Metric group ID type
+typedef int16_t h_p8_mtk_group_id;
 
-struct s_metric_attr
+/// @brief Check for metric ID validity
+#define P8_IS_METRIC_VALUD (id)(id > 0)
+
+/// @brief Callback for raw query metric: returns value for given metric ID
+typedef double (*l_p8_mtk_query_cb)(void *ip_user_context, h_p8_mtk_id ii_id);
+
+// Need to use functions inside
+// bool p8_mtk_group_emit_begin(h_p8_mtk_group_id ih_group_id);
+// bool p8_mtk_group_emit(h_p8_mtk_id ih_id, double id_value);
+// bool p8_mtk_group_emit_end(h_p8_mtk_group_id ih_group_id);
+typedef void (*l_p8_mtk_group_query_cb)(void *ip_user_context, h_p8_mtk_group_id ii_group_id);
+
+struct s_metric_base
 {
-    void       *mp_user_context;
-    const char *mp_name;
-    const char *mp_description;
-    const char *mp_unit;
-    const char *mp_type;
-    int64_t     mi_min;
-    int64_t     mi_max;
-    // callback
+    const char                 *mp_name;
+    const char                 *mp_description;
+    const char                 *mp_unit;
+    bool                        mb_on;
+    double                      md_min;
+    double                      md_max;
+    size_t                      iz_attrs;
+    const struct s_p8_attr_val *ip_attrs;
 };
 
-// types: (single val, mutlival) / observer + increment + on-off (cyclogram)
+h_p8_mtk_id p8_mtk_create(const s_metric_base *ip_base);
+bool        p8_mtk_emit(h_p8_mtk_id ih_id, double id_value);
+h_p8_mtk_id p8_mtk_create_query(const s_metric_base *ip_base,
+                                uint32_t             iu_query_interval_ms,
+                                l_p8_mtk_query_cb    il_query,
+                                void                *ip_user_context);
 
-/// @brief function to register telemetry counter
-/// @param ip_name [in] counter name
-/// @param id_min [in] min counter value
-/// @param id_alarm_min [in] value below which counter value will be interpreted as alarm signal on Baical's side
-/// @param id_max [in] max counter value
-/// @param id_alarm_max [in] value above which counter value will be interpreted as alarm signal on Baical's side
-/// @param ib_on [in] default counter state (true - on, false - off), can be changed later in real-time from Baical
-/// @param op_id [out] counter ID
-/// @return true - success, false - failure
-bool p8_tel_create_counter(const char *ip_name,
-                           double      id_min,
-                           вщгиду шв_ьштб
+h_p8_mtk_group_id p8_mtk_create_group(const s_metric_base *ip_base, bool ib_multi_thread);
 
-                           double       id_alarm_min,
-                           double       id_max,
-                           double       id_alarm_max,
-                           bool         ib_on,
-                           u_p8_mtk_id *op_id);
+// max group length is 1024 elements
+h_p8_mtk_id p8_mtk_group_add(h_p8_mtk_group_id ih_group_id, const char *ip_name);
+bool        p8_mtk_group_del(h_p8_mtk_id ih_mtk_id);
 
-/// @brief function to sent counter sample
-/// @param iu_id [in] counter ID
-/// @param id_value [in] sample value
-/// @return true - success, false - failure
-bool p8_tel_sent_sample(u_p8_mtk_id iu_id, double id_value);
+h_p8_mtk_group_id p8_mtk_create_group_query(const s_metric_base    *ip_base,
+                                            uint32_t                iu_query_interval_ms,
+                                            l_p8_mtk_group_query_cb il_query,
+                                            void                   *ip_user_context);
 
-/// @brief function to find counter ID by name (case sensitive)
-/// @param ip_name [in] counter name
-/// @param op_id [out] counter ID
-/// @return true - success, false - failure
-bool p8_tel_find_counter(const char *ip_name, u_p8_mtk_id *op_id);
-
-/// @brief function to enable counter
-/// @param iu_id [in] counter ID
-void p8_tel_manage_counter(u_p8_mtk_id iu_id, bool ib_enable);
-
-/// @brief function to retrieve enable state of the counter
-/// @param iu_id [in] counter ID
-/// @return true - enabled, false - disabled
-bool p8_tel_is_counter_enabled(u_p8_mtk_id iu_id);
-
-/// @brief get counter's name
-/// @param iu_id [in] counter ID
-/// @return name
-const char *p8_tel_get_counter_name(u_p8_mtk_id iu_id);
+bool p8_mtk_group_emit_begin(h_p8_mtk_group_id ih_group_id);
+bool p8_mtk_group_emit(h_p8_mtk_id ih_id, double id_value);
+bool p8_mtk_group_emit_end(h_p8_mtk_group_id ih_group_id);
