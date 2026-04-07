@@ -47,6 +47,7 @@ Each declared type **must** have one of the prefixes:
   * e - enum type or enum values
   * t - template
   * l - function pointer, lambda
+  * h - handle/custom type
 
 ### Variables
 Variable prefix must consist of access rights/visibility, one of the following:
