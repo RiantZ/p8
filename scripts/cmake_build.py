@@ -28,7 +28,9 @@ def get_platform() -> str:
 
 
 def get_build_dir(platform: str) -> Path:
-    suffix = {"windows": "_Build_wnd", "macos": "_Build_mac", "linux": "_Build_lnx"}[platform]
+    suffix = {"windows": "_Build_wnd", "macos": "_Build_mac", "linux": "_Build_lnx"}[
+        platform
+    ]
     return SOURCE_DIR / suffix
 
 
@@ -52,7 +54,9 @@ def find_vs_generators() -> list[str]:
 
 def choose_generator(generators: list[str]) -> str:
     if not generators:
-        print("Error: no Visual Studio generators found. Make sure CMake and Visual Studio are installed.")
+        print(
+            "Error: no Visual Studio generators found. Make sure CMake and Visual Studio are installed."
+        )
         sys.exit(1)
 
     if len(generators) == 1:
@@ -104,7 +108,9 @@ def main() -> None:
         description="CMake configure/build helper. Works on Windows, Linux and macOS."
     )
     parser.add_argument("--build", action="store_true", help="Build after configuring")
-    parser.add_argument("--clean", action="store_true", help="Remove build directory before configuring")
+    parser.add_argument(
+        "--clean", action="store_true", help="Remove build directory before configuring"
+    )
     args = parser.parse_args()
 
     platform = get_platform()
@@ -119,9 +125,31 @@ def main() -> None:
     if platform == "windows":
         generators = find_vs_generators()
         generator = choose_generator(generators)
-        run(["cmake", "-G", generator, "-A", "x64", "-S", str(SOURCE_DIR), "-B", str(build_dir)])
+        run(
+            [
+                "cmake",
+                "-G",
+                generator,
+                "-A",
+                "x64",
+                "-DP8_BUILD_SCRIPT=ON",
+                "-S",
+                str(SOURCE_DIR),
+                "-B",
+                str(build_dir),
+            ]
+        )
     else:
-        run(["cmake", "-S", str(SOURCE_DIR), "-B", str(build_dir)])
+        run(
+            [
+                "cmake",
+                "-DP8_BUILD_SCRIPT=ON",
+                "-S",
+                str(SOURCE_DIR),
+                "-B",
+                str(build_dir),
+            ]
+        )
 
     if args.build:
         run(["cmake", "--build", str(build_dir), "--config", "Release"])
