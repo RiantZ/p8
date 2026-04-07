@@ -35,8 +35,8 @@ struct s_p8_config
 /// @return true - P8 has been initialized, false - failure
 bool p8_initialize(const struct s_p8_config *ip_config);
 
-/// @brief
-/// @return
+/// @brief Check whether P8 has been successfully initialized
+/// @return true - P8 is initialized, false - not initialized
 bool p8_get_initialized();
 
 /// @brief Function allows to flush (deliver) not  delivered/saved  P8  buffers  for  all opened clients and related
@@ -203,6 +203,9 @@ typedef void *p_p8_module;
 /// @param ie_verbosity [in] verbosity level
 void p8_log_set_verbosity(p_p8_module ip_module, enum e_p8_level ie_verbosity);
 
+/// @brief get current log verbosity level for a module
+/// @param ip_module [in] module handle, if nullptr - returns default verbosity for entire p8
+/// @return current verbosity level
 enum e_p8_level p8_log_get_verbosity(p_p8_module ip_module);
 
 /// @brief function is used to register log module. Modules are used to group log messages by modules, use the same
@@ -386,45 +389,99 @@ typedef int16_t h_p8_mtk_group_id;
 /// @brief Check for metric ID validity
 #define P8_IS_METRIC_VALUD (id)(id > 0)
 
-/// @brief Callback for raw query metric: returns value for given metric ID
+/// @brief Callback type for query-based metric: P8 invokes this periodically to obtain the current metric value
+/// @param ip_user_context [in] opaque user-defined context passed during metric creation
+/// @param ii_id           [in] metric ID being queried
+/// @return current metric value
 typedef double (*l_p8_mtk_query_cb)(void *ip_user_context, h_p8_mtk_id ii_id);
 
-// Need to use functions inside
-// bool p8_mtk_group_emit_begin(h_p8_mtk_group_id ih_group_id);
-// bool p8_mtk_group_emit(h_p8_mtk_id ih_id, double id_value);
-// bool p8_mtk_group_emit_end(h_p8_mtk_group_id ih_group_id);
+/// @brief Callback type for group query: P8 invokes this periodically to let user emit values for all metrics
+///        in the group. Inside this callback, use p8_mtk_group_emit_begin / p8_mtk_group_emit /
+///        p8_mtk_group_emit_end to submit individual metric values.
+/// @param ip_user_context [in] opaque user-defined context passed during group creation
+/// @param ii_group_id     [in] group ID being queried
 typedef void (*l_p8_mtk_group_query_cb)(void *ip_user_context, h_p8_mtk_group_id ii_group_id);
 
+/// @brief Base descriptor used to create any metric (single or group, push or query)
 struct s_metric_base
 {
-    const char                 *mp_name;
-    const char                 *mp_description;
-    const char                 *mp_unit;
-    bool                        mb_on;
-    double                      md_min;
-    double                      md_max;
-    size_t                      iz_attrs;
-    const struct s_p8_attr_val *ip_attrs;
+    const char                 *mp_name;        ///< metric display name (must not be nullptr)
+    const char                 *mp_description; ///< human-readable description (may be nullptr)
+    const char                 *mp_unit;        ///< measurement unit label, e.g. "ms", "bytes" (may be nullptr)
+    bool                        mb_on;          ///< initial enabled state: true - metric is active, false - disabled
+    double                      md_min;         ///< expected minimum value (used for visualization hints)
+    double                      md_max;         ///< expected maximum value (used for visualization hints)
+    size_t                      iz_attrs;       ///< number of elements in ip_attrs array; 0 when no attributes
+    const struct s_p8_attr_val *ip_attrs;       ///< array of attributes of length iz_attrs; nullptr when iz_attrs == 0
 };
 
+/// @brief Create a push-based metric. Caller is responsible for emitting values via p8_mtk_emit.
+/// @param ip_base [in] metric descriptor
+/// @return positive metric ID on success, negative value on failure
 h_p8_mtk_id p8_mtk_create(const s_metric_base *ip_base);
-bool        p8_mtk_emit(h_p8_mtk_id ih_id, double id_value);
+
+/// @brief Emit (push) a sample value for a previously created metric
+/// @param ih_id    [in] metric ID returned by p8_mtk_create
+/// @param id_value [in] sample value
+/// @return true - success, false - failure
+bool p8_mtk_emit(h_p8_mtk_id ih_id, double id_value);
+
+/// @brief Create a query-based (pull) metric. P8 will periodically invoke il_query callback at the specified
+///        interval to obtain the current value.
+/// @param ip_base               [in] metric descriptor
+/// @param iu_query_interval_ms  [in] query period in milliseconds
+/// @param il_query              [in] callback invoked by P8 to obtain the metric value
+/// @param ip_user_context       [in] opaque pointer forwarded to il_query on each invocation
+/// @return positive metric ID on success, negative value on failure
 h_p8_mtk_id p8_mtk_create_query(const s_metric_base *ip_base,
                                 uint32_t             iu_query_interval_ms,
                                 l_p8_mtk_query_cb    il_query,
                                 void                *ip_user_context);
 
+/// @brief Create a push-based metric group. Grouped metrics share a common time base and are emitted together
+///        via p8_mtk_group_emit_begin / p8_mtk_group_emit / p8_mtk_group_emit_end sequence.
+/// @param ip_base          [in] group descriptor (mp_name becomes the group name)
+/// @param ib_multi_thread  [in] true if emit calls may come from different threads (enables internal locking)
+/// @return positive group ID on success, negative value on failure
 h_p8_mtk_group_id p8_mtk_create_group(const s_metric_base *ip_base, bool ib_multi_thread);
 
-// max group length is 1024 elements
+/// @brief Add a metric to an existing group. Maximum group size is 1024 elements.
+/// @param ih_group_id [in] group ID returned by p8_mtk_create_group
+/// @param ip_name     [in] metric name within the group
+/// @return positive metric ID on success, negative value on failure
 h_p8_mtk_id p8_mtk_group_add(h_p8_mtk_group_id ih_group_id, const char *ip_name);
-bool        p8_mtk_group_del(h_p8_mtk_id ih_mtk_id);
 
+/// @brief Remove a metric from its group
+/// @param ih_mtk_id [in] metric ID returned by p8_mtk_group_add
+/// @return true - success, false - failure
+bool p8_mtk_group_del(h_p8_mtk_id ih_mtk_id);
+
+/// @brief Create a query-based (pull) metric group. P8 will periodically invoke il_query callback at the
+///        specified interval. Inside the callback, use p8_mtk_group_emit_begin / p8_mtk_group_emit /
+///        p8_mtk_group_emit_end to submit values for each metric in the group.
+/// @param ip_base              [in] group descriptor (mp_name becomes the group name)
+/// @param iu_query_interval_ms [in] query period in milliseconds
+/// @param il_query             [in] callback invoked by P8 to collect group metric values
+/// @param ip_user_context      [in] opaque pointer forwarded to il_query on each invocation
+/// @return positive group ID on success, negative value on failure
 h_p8_mtk_group_id p8_mtk_create_group_query(const s_metric_base    *ip_base,
                                             uint32_t                iu_query_interval_ms,
                                             l_p8_mtk_group_query_cb il_query,
                                             void                   *ip_user_context);
 
+/// @brief Begin an atomic emission batch for a metric group. Must be followed by one or more p8_mtk_group_emit
+///        calls and terminated by p8_mtk_group_emit_end. All values within a batch share the same timestamp.
+/// @param ih_group_id [in] group ID returned by p8_mtk_create_group or p8_mtk_create_group_query
+/// @return true - success, false - failure
 bool p8_mtk_group_emit_begin(h_p8_mtk_group_id ih_group_id);
+
+/// @brief Emit a single metric value inside an active group batch (between begin/end calls)
+/// @param ih_id    [in] metric ID returned by p8_mtk_group_add
+/// @param id_value [in] sample value
+/// @return true - success, false - failure
 bool p8_mtk_group_emit(h_p8_mtk_id ih_id, double id_value);
+
+/// @brief Finalize and flush the current group emission batch started by p8_mtk_group_emit_begin
+/// @param ih_group_id [in] group ID matching the preceding p8_mtk_group_emit_begin call
+/// @return true - success, false - failure
 bool p8_mtk_group_emit_end(h_p8_mtk_group_id ih_group_id);
