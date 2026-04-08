@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.20...4.0 FATAL_ERROR)
 
 project(Protocol8)
 
@@ -46,8 +46,7 @@ endfunction()
 set(ROOT_P8_PATH ${PROJECT_SOURCE_DIR} CACHE INTERNAL "")
 
 if(MSVC)
-    add_definitions(-D_UNICODE)
-    add_definitions(-DUNICODE)
+    add_compile_definitions(_UNICODE UNICODE)
 
     if(NOT COMMAND set_ide_folder)
         macro(set_ide_folder _project_name)
@@ -85,6 +84,7 @@ else()
     endmacro()
 endif()
 
+set(CMAKE_LINK_WARNING_AS_ERROR ON)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 

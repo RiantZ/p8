@@ -1,9 +1,9 @@
-# P7 library
+# Protocol8
 ## Building
 
 ### Prerequisites
 
-- CMake 3.20+
+- CMake 3.20+ (tested up to 4.0)
 - Python 3
 - C++20 compatible compiler (MSVC, GCC, Clang)
 
@@ -22,12 +22,14 @@ python scripts/cmake_build.py --build
 python scripts/cmake_build.py --clean --build
 ```
 
+The script uses `CMakePresets.json` to select the right preset for each platform automatically.
+
 Build output is placed in a platform-specific directory at the project root:
 
-| Platform | Directory     |
-|----------|---------------|
-| Windows  | `_Build_wnd/` |
-| macOS    | `_Build_mac/` |
-| Linux    | `_Build_lnx/` |
+| Platform | Directory     | Preset    |
+|----------|---------------|-----------|
+| Windows  | `_Build_wnd/` | `windows` |
+| macOS    | `_Build_mac/` | `macos`   |
+| Linux    | `_Build_lnx/` | `linux`   |
 
-On Windows the script auto-detects available Visual Studio generators and prompts to choose one if several are found.
+You can also invoke CMake directly with a preset: `cmake --preset macos`.

@@ -10,7 +10,6 @@ Usage:
 """
 
 import argparse
-import re
 import shutil
 import subprocess
 import sys
@@ -32,49 +31,6 @@ def get_build_dir(platform: str) -> Path:
         platform
     ]
     return SOURCE_DIR / suffix
-
-
-def find_vs_generators() -> list[str]:
-    """Parse available Visual Studio generators from cmake --help output."""
-    try:
-        result = subprocess.run(["cmake", "--help"], capture_output=True, text=True)
-    except FileNotFoundError:
-        print("Error: cmake not found in PATH.")
-        sys.exit(1)
-
-    output = result.stdout + result.stderr
-    generators = re.findall(r"Visual Studio \d+ \d+", output)
-
-    seen: list[str] = []
-    for g in generators:
-        if g not in seen:
-            seen.append(g)
-    return seen
-
-
-def choose_generator(generators: list[str]) -> str:
-    if not generators:
-        print(
-            "Error: no Visual Studio generators found. Make sure CMake and Visual Studio are installed."
-        )
-        sys.exit(1)
-
-    if len(generators) == 1:
-        print(f"Using generator: {generators[0]}")
-        return generators[0]
-
-    print("Available Visual Studio generators:")
-    for i, g in enumerate(generators, 1):
-        print(f"  {i}. {g}")
-
-    while True:
-        try:
-            choice = int(input(f"Select generator [1-{len(generators)}]: "))
-            if 1 <= choice <= len(generators):
-                return generators[choice - 1]
-            print(f"Please enter a number between 1 and {len(generators)}.")
-        except (ValueError, EOFError):
-            print(f"Please enter a number between 1 and {len(generators)}.")
 
 
 def run(cmd: list[str]) -> None:
@@ -120,36 +76,7 @@ def main() -> None:
         print(f"Removing {build_dir} ...")
         shutil.rmtree(build_dir)
 
-    build_dir.mkdir(exist_ok=True)
-
-    if platform == "windows":
-        generators = find_vs_generators()
-        generator = choose_generator(generators)
-        run(
-            [
-                "cmake",
-                "-G",
-                generator,
-                "-A",
-                "x64",
-                "-DP8_BUILD_SCRIPT=ON",
-                "-S",
-                str(SOURCE_DIR),
-                "-B",
-                str(build_dir),
-            ]
-        )
-    else:
-        run(
-            [
-                "cmake",
-                "-DP8_BUILD_SCRIPT=ON",
-                "-S",
-                str(SOURCE_DIR),
-                "-B",
-                str(build_dir),
-            ]
-        )
+    run(["cmake", "--preset", platform, "-S", str(SOURCE_DIR)])
 
     if args.build:
         run(["cmake", "--build", str(build_dir), "--config", "Release"])

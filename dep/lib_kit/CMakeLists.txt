@@ -4,8 +4,6 @@
 #target_include_directories(lib_kit INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/)
 #so I was FORCED to create normal library.
 
-include_directories(.)
-
 set(lib_kit ${CMAKE_CURRENT_SOURCE_DIR} CACHE INTERNAL "")
 
 

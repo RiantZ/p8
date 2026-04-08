@@ -1,0 +1,26 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21 },
+  "configurePresets": [
+    {
+      "name": "windows",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/_Build_wnd",
+      "cacheVariables": { "P8_BUILD_SCRIPT": "ON" }
+    },
+    {
+      "name": "macos",
+      "binaryDir": "${sourceDir}/_Build_mac",
+      "cacheVariables": {
+        "P8_BUILD_SCRIPT": "ON",
+        "CMAKE_OSX_SYSROOT": "macosx"
+      }
+    },
+    {
+      "name": "linux",
+      "binaryDir": "${sourceDir}/_Build_lnx",
+      "cacheVariables": { "P8_BUILD_SCRIPT": "ON" }
+    }
+  ]
+}

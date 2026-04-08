@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20...4.0)
 
 project(P8_RegressionTests)
 
@@ -15,10 +15,9 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-include_directories(${P8_API})
-include_directories(lib_kit)
-
 add_executable(${PROJECT_NAME} main.cpp)
+
+target_include_directories(${PROJECT_NAME} PRIVATE ${P8_API} lib_kit)
 
 target_link_libraries (${PROJECT_NAME} lib_kit gtest_main)
 
