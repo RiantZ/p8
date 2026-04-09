@@ -8,6 +8,6 @@ add_library(p8 STATIC
 
 target_include_directories(p8 PRIVATE "${P8_API}")
 set_property(TARGET p8 PROPERTY POSITION_INDEPENDENT_CODE ON)
-target_link_libraries(p8 PRIVATE lib_kit)
+target_link_libraries(p8 PRIVATE kit::kit)
 
 set_ide_folder(p8)

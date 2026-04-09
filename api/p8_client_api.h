@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ts_helpers.h"
+#include "kit/ts_helpers.h"
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -395,15 +395,28 @@ typedef int16_t h_p8_mtk_group_id;
 /// @return current metric value
 typedef double (*l_p8_mtk_query_cb)(void *ip_user_context, h_p8_mtk_id ii_id);
 
-/// @brief Callback type for group query: P8 invokes this periodically to let user emit values for all metrics
-///        in the group. Inside this callback, use p8_mtk_group_emit_begin / p8_mtk_group_emit /
-///        p8_mtk_group_emit_end to submit individual metric values.
+struct s_p8_mtk_group_item
+{
+    h_p8_mtk_id mh_id;
+    double      md_value;
+};
+
+struct s_p8_mtk_group
+{
+    size_t                mz_items_max;
+    s_p8_mtk_group_item **mp_items;
+    size_t                mz_items;
+};
+
+/// @brief Callback type for group query
 /// @param ip_user_context [in] opaque user-defined context passed during group creation
 /// @param ii_group_id     [in] group ID being queried
-typedef void (*l_p8_mtk_group_query_cb)(void *ip_user_context, h_p8_mtk_group_id ii_group_id);
+typedef void (*l_p8_mtk_group_query_cb)(void             *ip_user_context,
+                                        h_p8_mtk_group_id ii_group_id,
+                                        s_p8_mtk_group   *iop_values);
 
 /// @brief Base descriptor used to create any metric (single or group, push or query)
-struct s_metric_base
+struct s_p8_mtk_base
 {
     const char                 *mp_name;        ///< metric display name (must not be nullptr)
     const char                 *mp_description; ///< human-readable description (may be nullptr)
@@ -411,14 +424,14 @@ struct s_metric_base
     bool                        mb_on;          ///< initial enabled state: true - metric is active, false - disabled
     double                      md_min;         ///< expected minimum value (used for visualization hints)
     double                      md_max;         ///< expected maximum value (used for visualization hints)
-    size_t                      iz_attrs;       ///< number of elements in ip_attrs array; 0 when no attributes
-    const struct s_p8_attr_val *ip_attrs;       ///< array of attributes of length iz_attrs; nullptr when iz_attrs == 0
+    size_t                      mz_attrs;       ///< number of elements in ip_attrs array; 0 when no attributes
+    const struct s_p8_attr_val *mp_attrs;       ///< array of attributes of length iz_attrs; nullptr when iz_attrs == 0
 };
 
 /// @brief Create a push-based metric. Caller is responsible for emitting values via p8_mtk_emit.
 /// @param ip_base [in] metric descriptor
 /// @return positive metric ID on success, negative value on failure
-h_p8_mtk_id p8_mtk_create(const s_metric_base *ip_base);
+h_p8_mtk_id p8_mtk_create(const s_p8_mtk_base *ip_base);
 
 /// @brief Emit (push) a sample value for a previously created metric
 /// @param ih_id    [in] metric ID returned by p8_mtk_create
@@ -433,7 +446,7 @@ bool p8_mtk_emit(h_p8_mtk_id ih_id, double id_value);
 /// @param il_query              [in] callback invoked by P8 to obtain the metric value
 /// @param ip_user_context       [in] opaque pointer forwarded to il_query on each invocation
 /// @return positive metric ID on success, negative value on failure
-h_p8_mtk_id p8_mtk_create_query(const s_metric_base *ip_base,
+h_p8_mtk_id p8_mtk_create_query(const s_p8_mtk_base *ip_base,
                                 uint32_t             iu_query_interval_ms,
                                 l_p8_mtk_query_cb    il_query,
                                 void                *ip_user_context);
@@ -443,7 +456,7 @@ h_p8_mtk_id p8_mtk_create_query(const s_metric_base *ip_base,
 /// @param ip_base          [in] group descriptor (mp_name becomes the group name)
 /// @param ib_multi_thread  [in] true if emit calls may come from different threads (enables internal locking)
 /// @return positive group ID on success, negative value on failure
-h_p8_mtk_group_id p8_mtk_create_group(const s_metric_base *ip_base, bool ib_multi_thread);
+h_p8_mtk_group_id p8_mtk_create_group(const s_p8_mtk_base *ip_base, bool ib_multi_thread);
 
 /// @brief Add a metric to an existing group. Maximum group size is 1024 elements.
 /// @param ih_group_id [in] group ID returned by p8_mtk_create_group
@@ -464,7 +477,7 @@ bool p8_mtk_group_del(h_p8_mtk_id ih_mtk_id);
 /// @param il_query             [in] callback invoked by P8 to collect group metric values
 /// @param ip_user_context      [in] opaque pointer forwarded to il_query on each invocation
 /// @return positive group ID on success, negative value on failure
-h_p8_mtk_group_id p8_mtk_create_group_query(const s_metric_base    *ip_base,
+h_p8_mtk_group_id p8_mtk_create_group_query(const s_p8_mtk_base    *ip_base,
                                             uint32_t                iu_query_interval_ms,
                                             l_p8_mtk_group_query_cb il_query,
                                             void                   *ip_user_context);

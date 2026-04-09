@@ -17,9 +17,9 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(${PROJECT_NAME} main.cpp)
 
-target_include_directories(${PROJECT_NAME} PRIVATE ${P8_API} lib_kit)
+target_include_directories(${PROJECT_NAME} PRIVATE ${P8_API})
 
-target_link_libraries (${PROJECT_NAME} lib_kit gtest_main)
+target_link_libraries(${PROJECT_NAME} gtest_main)
 
 add_test(NAME P8_RegressionTests COMMAND P8_RegressionTests)
 
