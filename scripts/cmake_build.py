@@ -3,10 +3,11 @@
 Cross-platform CMake build helper.
 
 Usage:
-  python scripts/cmake_build.py           # configure only
-  python scripts/cmake_build.py --build   # configure + build
-  python scripts/cmake_build.py --clean   # wipe build dir, then configure
-  python scripts/cmake_build.py --clean --build  # wipe, configure, build
+  python scripts/cmake_build.py                                    # configure only
+  python scripts/cmake_build.py --build                            # configure + build
+  python scripts/cmake_build.py --clean                            # wipe build dir, then configure
+  python scripts/cmake_build.py --clean --build                    # wipe, configure, build
+  python scripts/cmake_build.py --preset macos-local-kit --build   # use a custom preset
 """
 
 import argparse
@@ -67,16 +68,20 @@ def main() -> None:
     parser.add_argument(
         "--clean", action="store_true", help="Remove build directory before configuring"
     )
+    parser.add_argument(
+        "--preset", default=None, help="CMake preset name (default: auto-detect by platform)"
+    )
     args = parser.parse_args()
 
     platform = get_platform()
+    preset = args.preset or platform
     build_dir = get_build_dir(platform)
 
     if args.clean and build_dir.exists():
         print(f"Removing {build_dir} ...")
         shutil.rmtree(build_dir)
 
-    run(["cmake", "--preset", platform, "-S", str(SOURCE_DIR)])
+    run(["cmake", "--preset", preset, "-S", str(SOURCE_DIR)])
 
     if args.build:
         run(["cmake", "--build", str(build_dir), "--config", "Release"])
