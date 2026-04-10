@@ -1,0 +1,7 @@
+{
+    "exclude_patterns": [
+        ["dir", "^_Build"],
+        ["dir", "^\\.git$"],
+        ["file", "_lib$"]
+    ]
+}
