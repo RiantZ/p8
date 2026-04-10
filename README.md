@@ -33,3 +33,30 @@ Build output is placed in a platform-specific directory at the project root:
 | Linux    | `_Build_lnx/` | `linux`   |
 
 You can also invoke CMake directly with a preset: `cmake --preset macos`.
+
+### Custom presets
+
+To override settings without changing tracked files, create `CMakeUserPresets.json` (git-ignored) in the project root. A preset defined there can inherit from any base preset in `CMakePresets.json`.
+
+Example — use a local kit checkout instead of fetching from GitHub:
+
+```json
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "macos-local-kit",
+      "inherits": "macos",
+      "cacheVariables": {
+        "FETCHCONTENT_SOURCE_DIR_KIT": "${sourceDir}/../kit"
+      }
+    }
+  ]
+}
+```
+
+Then build with:
+
+```bash
+python scripts/cmake_build.py --preset macos-local-kit --build
+```
