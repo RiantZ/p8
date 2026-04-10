@@ -1,5 +1,6 @@
 ﻿_Build_*/
 *.pyc
 CMakeUserPresets.json
+dep/kit
 doc/code_style.md
 scripts/code_format.py
