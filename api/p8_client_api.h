@@ -102,7 +102,9 @@ typedef int32_t p8_attr_id;
 
 /// @brief Sentinel value for an invalid / unregistered attribute.
 // TODO: add error codes
-#define P8_IS_ATTR_VALID(x) (((p8_attr_id)(x)) > 0)
+#define P8_IS_ATTR_VALID(x)           (((p8_attr_id)(x)) > 0)
+
+#define P8_ATTR_ERROR_NOT_IMPLEMENTED -1
 
 /// @brief Register a named attribute with a fixed value type.
 ///
