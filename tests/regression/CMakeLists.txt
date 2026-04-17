@@ -15,11 +15,14 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-add_executable(${PROJECT_NAME} main.cpp)
+add_executable(${PROJECT_NAME}
+    main.cpp
+    p8_config_test.cpp
+)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${P8_API})
 
-target_link_libraries(${PROJECT_NAME} gtest_main)
+target_link_libraries(${PROJECT_NAME} gtest_main p8 kit::kit)
 
 add_test(NAME P8_RegressionTests COMMAND P8_RegressionTests)
 
