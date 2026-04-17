@@ -102,7 +102,7 @@ typedef int32_t p8_attr_id;
 
 /// @brief Sentinel value for an invalid / unregistered attribute.
 // TODO: add error codes
-#define P8_ATTR_INVALID ((p8_attr_id)0)
+#define P8_IS_ATTR_VALID(x) (((p8_attr_id)(x)) > 0)
 
 /// @brief Register a named attribute with a fixed value type.
 ///
@@ -387,7 +387,7 @@ typedef int32_t h_p8_mtk_id;
 typedef int16_t h_p8_mtk_group_id;
 
 /// @brief Check for metric ID validity
-#define P8_IS_METRIC_VALUD (id)(id > 0)
+#define P8_IS_METRIC_VALID (id)((id) > 0)
 
 /// @brief Callback type for query-based metric: P8 invokes this periodically to obtain the current metric value
 /// @param ip_user_context [in] opaque user-defined context passed during metric creation
@@ -395,25 +395,11 @@ typedef int16_t h_p8_mtk_group_id;
 /// @return current metric value
 typedef double (*l_p8_mtk_query_cb)(void *ip_user_context, h_p8_mtk_id ii_id);
 
-struct s_p8_mtk_group_item
-{
-    h_p8_mtk_id mh_id;
-    double      md_value;
-};
-
-struct s_p8_mtk_group
-{
-    size_t                mz_items_max;
-    s_p8_mtk_group_item **mp_items;
-    size_t                mz_items;
-};
-
-/// @brief Callback type for group query
+/// @brief Callback type for group query, grouped metrics share a common time base and are emitted together
+///        via p8_mtk_group_emit_begin / p8_mtk_group_emit / p8_mtk_group_emit_end sequence
 /// @param ip_user_context [in] opaque user-defined context passed during group creation
 /// @param ii_group_id     [in] group ID being queried
-typedef void (*l_p8_mtk_group_query_cb)(void             *ip_user_context,
-                                        h_p8_mtk_group_id ii_group_id,
-                                        s_p8_mtk_group   *iop_values);
+typedef void (*l_p8_mtk_group_query_cb)(void *ip_user_context, h_p8_mtk_group_id ii_group_id);
 
 /// @brief Base descriptor used to create any metric (single or group, push or query)
 struct s_p8_mtk_base
@@ -454,20 +440,10 @@ h_p8_mtk_id p8_mtk_create_query(const s_p8_mtk_base *ip_base,
 /// @brief Create a push-based metric group. Grouped metrics share a common time base and are emitted together
 ///        via p8_mtk_group_emit_begin / p8_mtk_group_emit / p8_mtk_group_emit_end sequence.
 /// @param ip_base          [in] group descriptor (mp_name becomes the group name)
-/// @param ib_multi_thread  [in] true if emit calls may come from different threads (enables internal locking)
+/// @param ib_multi_thread  [in] true if emit calls for p8_mtk_group_emit_begin / p8_mtk_group_emit /
+/// p8_mtk_group_emit_end may come from different threads (enables internal locking)
 /// @return positive group ID on success, negative value on failure
 h_p8_mtk_group_id p8_mtk_create_group(const s_p8_mtk_base *ip_base, bool ib_multi_thread);
-
-/// @brief Add a metric to an existing group. Maximum group size is 1024 elements.
-/// @param ih_group_id [in] group ID returned by p8_mtk_create_group
-/// @param ip_name     [in] metric name within the group
-/// @return positive metric ID on success, negative value on failure
-h_p8_mtk_id p8_mtk_group_add(h_p8_mtk_group_id ih_group_id, const char *ip_name);
-
-/// @brief Remove a metric from its group
-/// @param ih_mtk_id [in] metric ID returned by p8_mtk_group_add
-/// @return true - success, false - failure
-bool p8_mtk_group_del(h_p8_mtk_id ih_mtk_id);
 
 /// @brief Create a query-based (pull) metric group. P8 will periodically invoke il_query callback at the
 ///        specified interval. Inside the callback, use p8_mtk_group_emit_begin / p8_mtk_group_emit /
@@ -489,10 +465,10 @@ h_p8_mtk_group_id p8_mtk_create_group_query(const s_p8_mtk_base    *ip_base,
 bool p8_mtk_group_emit_begin(h_p8_mtk_group_id ih_group_id);
 
 /// @brief Emit a single metric value inside an active group batch (between begin/end calls)
-/// @param ih_id    [in] metric ID returned by p8_mtk_group_add
+/// @param ip_name  [in] metric name
 /// @param id_value [in] sample value
 /// @return true - success, false - failure
-bool p8_mtk_group_emit(h_p8_mtk_id ih_id, double id_value);
+bool p8_mtk_group_emit(const char *ip_name, double id_value);
 
 /// @brief Finalize and flush the current group emission batch started by p8_mtk_group_emit_begin
 /// @param ih_group_id [in] group ID matching the preceding p8_mtk_group_emit_begin call
