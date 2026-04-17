@@ -10,53 +10,68 @@ extern "C"
 
     char *p8_config_read_file(const tXCHAR *ip_path, size_t *op_size)
     {
+        FILE  *lp_file  = nullptr;
+        char  *lp_buf   = nullptr;
+        long   li_pos   = 0;
+        size_t lz_size  = 0;
+        size_t lz_read  = 0;
+        bool   lb_error = false;
+
         if(op_size)
         {
             *op_size = 0;
         }
+
         if(!ip_path)
         {
-            return nullptr;
+            std::fprintf(stderr, "p8_config_read_file: NULL path\n");
+            lb_error = true;
+            goto lbl_exit;
         }
 
 #ifdef G_OS_WINDOWS
-        FILE *lp_file = _wfopen(ip_path, L"rb");
+        lp_file = _wfopen(ip_path, L"rb");
 #else
-        FILE *lp_file = std::fopen(ip_path, "rb");
+        lp_file = std::fopen(ip_path, "rb");
 #endif
         if(!lp_file)
         {
-            return nullptr;
+            std::fprintf(stderr, "p8_config_read_file: failed to open file\n");
+            lb_error = true;
+            goto lbl_exit;
         }
 
         if(std::fseek(lp_file, 0, SEEK_END) != 0)
         {
-            std::fclose(lp_file);
-            return nullptr;
+            std::fprintf(stderr, "p8_config_read_file: fseek to end failed\n");
+            lb_error = true;
+            goto lbl_exit;
         }
-        const long li_pos = std::ftell(lp_file);
+
+        li_pos = std::ftell(lp_file);
         if(li_pos < 0)
         {
-            std::fclose(lp_file);
-            return nullptr;
+            std::fprintf(stderr, "p8_config_read_file: ftell failed\n");
+            lb_error = true;
+            goto lbl_exit;
         }
         std::rewind(lp_file);
 
-        const size_t lz_size = static_cast<size_t>(li_pos);
-        char        *lp_buf  = static_cast<char *>(std::malloc(lz_size + 1));
+        lz_size = static_cast<size_t>(li_pos);
+        lp_buf  = static_cast<char *>(std::malloc(lz_size + 1));
         if(!lp_buf)
         {
-            std::fclose(lp_file);
-            return nullptr;
+            std::fprintf(stderr, "p8_config_read_file: malloc of %zu bytes failed\n", lz_size + 1);
+            lb_error = true;
+            goto lbl_exit;
         }
 
-        const size_t lz_read = std::fread(lp_buf, 1, lz_size, lp_file);
-        std::fclose(lp_file);
-
+        lz_read = std::fread(lp_buf, 1, lz_size, lp_file);
         if(lz_read != lz_size)
         {
-            std::free(lp_buf);
-            return nullptr;
+            std::fprintf(stderr, "p8_config_read_file: short read %zu of %zu bytes\n", lz_read, lz_size);
+            lb_error = true;
+            goto lbl_exit;
         }
 
         lp_buf[lz_size] = '\0';
@@ -64,6 +79,18 @@ extern "C"
         if(op_size)
         {
             *op_size = lz_size;
+        }
+
+lbl_exit:
+        if(lp_file)
+        {
+            std::fclose(lp_file);
+        }
+
+        if(lb_error && lp_buf)
+        {
+            std::free(lp_buf);
+            lp_buf = nullptr;
         }
         return lp_buf;
     }
