@@ -22,10 +22,53 @@ static std::atomic<uint32_t> gu_instance_count { 0 };
 // cp8_core implementation
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-cp8_core::cp8_core(const struct s_p8_config *)
-    : mb_initialized(true)
+cp8_core::cp8_core(const struct s_p8_config *ip_config)
+    : mb_initialized(false)
 {
     gu_instance_count.fetch_add(1, std::memory_order_relaxed);
+
+    if(!ip_config->mp_json_config)
+    {
+        std::fprintf(stderr, "cp8_core: mp_json_config is NULL\n");
+        return;
+    }
+
+    nlohmann::json lo_json;
+
+    try
+    {
+        lo_json = nlohmann::json::parse(ip_config->mp_json_config,
+                                        /*callback=*/nullptr,
+                                        /*allow_exceptions=*/true,
+                                        /*ignore_comments=*/true);
+    }
+    catch(const nlohmann::json::parse_error &ir_err)
+    {
+        std::fprintf(stderr, "cp8_core: JSON parse error: %s\n", ir_err.what());
+        return;
+    }
+    catch(const std::exception &ir_err)
+    {
+        std::fprintf(stderr, "cp8_core: unexpected error: %s\n", ir_err.what());
+        return;
+    }
+
+    if(lo_json.contains("sync"))
+    {
+        // TODO: configure sync mode (file.bin, network.tcp)
+    }
+
+    if(lo_json.contains("destination"))
+    {
+        // TODO: configure destination path or network endpoint
+    }
+
+    if(lo_json.contains("buffer"))
+    {
+        // TODO: configure internal buffer size
+    }
+
+    mb_initialized = true;
 }
 
 cp8_core::~cp8_core()
@@ -97,38 +140,17 @@ extern "C"
             goto lbl_exit;
         }
 
-        if(!ip_config->mp_json_config)
-        {
-            std::fprintf(stderr, "p8_initialize: mp_json_config is NULL\n");
-            lb_error = true;
-            goto lbl_exit;
-        }
-
-        try
-        {
-            (void)nlohmann::json::parse(ip_config->mp_json_config,
-                                        /*callback=*/nullptr,
-                                        /*allow_exceptions=*/true,
-                                        /*ignore_comments=*/true);
-        }
-        catch(const nlohmann::json::parse_error &ir_err)
-        {
-            std::fprintf(stderr, "p8_initialize: JSON parse error: %s\n", ir_err.what());
-            lb_error = true;
-            goto lbl_exit;
-        }
-        catch(const std::exception &ir_err)
-        {
-            std::fprintf(stderr, "p8_initialize: unexpected error: %s\n", ir_err.what());
-            lb_error = true;
-            goto lbl_exit;
-        }
-
-        // 4. create core instance
+        // 4. create core instance (constructor parses JSON, sets mb_initialized on failure)
         lp_new = new(std::nothrow) cp8_core(ip_config);
         if(!lp_new)
         {
             std::fprintf(stderr, "p8_initialize: allocation failed\n");
+            lb_error = true;
+            goto lbl_exit;
+        }
+
+        if(!lp_new->get_initialized())
+        {
             lb_error = true;
             goto lbl_exit;
         }
