@@ -1,11 +1,12 @@
 ---
-name: p8-code-style
-description: Enforces the p8 project C/C++ naming and code style (lowercase snake_case, mandatory type/visibility prefixes, file naming, define casing) defined in doc/code_style.md. Use whenever writing, generating, refactoring, renaming, or reviewing C, C++, or header code in this repository, including any new file, function, class, struct, enum, typedef, variable, parameter, or macro.
+description: p8 C/C++ naming and code style - lowercase snake_case, mandatory type/visibility prefixes, file naming, define casing
+globs: "**/*.cpp,**/*.c,**/*.h,**/*.hpp"
+alwaysApply: false
 ---
 
 # p8 Code Style
 
-The full reference is `doc/code_style.md`. This skill is the operational summary the agent MUST follow when producing any C/C++ code in this repo. Defaults are non-negotiable unless the user explicitly overrides them.
+Full reference: `doc/code_style.md`. Defaults are non-negotiable unless the user explicitly overrides them.
 
 ## Golden Rules
 
@@ -121,7 +122,7 @@ void my_function(c_my_class *&or_object)
 }
 ```
 
-## Pre-Submit Checklist (run mentally before finishing any code change)
+## Pre-Submit Checklist
 
 - [ ] All new files use `lower_snake_case.{c,cpp,h,hpp}`.
 - [ ] Every new type has a single-letter type prefix (`c_`, `s_`, `e_`, `h_`, `l_`, `t_`).
