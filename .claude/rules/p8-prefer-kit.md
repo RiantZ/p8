@@ -1,0 +1,55 @@
+---
+paths:
+  - "**/*.cpp"
+  - "**/*.c"
+  - "**/*.h"
+  - "**/*.hpp"
+---
+
+# Prefer `dep/kit` over std / libc / POSIX
+
+This project ships with an in-tree toolset library at `dep/kit` (public headers under `dep/kit/include/kit/`). When **both** kit and the standard library (or libc, or POSIX/Win32) can do the job, **pick kit**.
+
+> Kit is evolving. The source of truth is `dep/kit/include/kit/` and `dep/kit/README.md`, **not** this cheat sheet. Always rediscover before deciding.
+
+## Decision Rule
+
+1. **Discover.** Before picking any non-trivial primitive, check `dep/kit/include/kit/` and the "Modules" section of `dep/kit/README.md`.
+2. **Match.** If any kit module covers the task — use kit. Do not include the std/POSIX/Win32 equivalent.
+3. **Fallback.** If kit does **not** cover it — use the most portable standard option.
+4. **Unsure.** Ask the user before falling back.
+
+## Kit Cheat Sheet (non-authoritative snapshot)
+
+| Task                                   | Use (kit)                          | Do NOT use                                                |
+|----------------------------------------|------------------------------------|-----------------------------------------------------------|
+| Doubly-linked list                     | `kit::c_lst<T>` (`kit/list.hpp`)   | `std::list`, hand-rolled linked lists                     |
+| Fast / recursive lock on hot paths     | `kit::c_spin_lock` (`kit/spin_lock.hpp`) | `std::mutex`, `std::recursive_mutex`, `pthread_mutex_t`, `CRITICAL_SECTION` |
+| CPU spin / pause primitive             | `kit/plasma.hpp`                   | Inline `__asm__("pause")`, `_mm_pause()`                  |
+| Named shared memory + named semaphore  | `c_shared` (`kit/shared_mem.hpp`)  | `shm_open` + `mmap` + `sem_open`, `CreateFileMapping`     |
+| OS detection at compile time           | `G_OS_LINUX` / `G_OS_DARWIN` / `G_OS_WINDOWS` (`kit/ts_helpers.h`) | Raw `__linux__` / `__APPLE__` / `_WIN32`  |
+| 32/64-bit arch detection               | `GTX32` / `GTX64` (`kit/ts_helpers.h`) | Raw `__x86_64__` / `_WIN64`                           |
+| Portable char type                     | `XCHAR`, `tXCHAR` (`kit/ts_helpers.h`, `kit/types.h`) | Bare `char *` / `wchar_t *` in cross-platform paths |
+| String literal (auto char width)       | `TM("...")` / `TMM(...)` (`kit/ts_helpers.h`) | `L"..."` / `"..."` duplicated per platform          |
+| Duplicate a platform string            | `pstr_dup` / `pstr_free_dup` (`kit/types.h`) | `strdup`, `_wcsdup`, manual `malloc`+`memcpy`        |
+| Packing / alignment attribute          | `PRAGMA_PACK_ENTER` / `ATTR_PACK` / `ATTR_ALIGN` (`kit/ts_helpers.h`) | Raw `__attribute__((packed))`, `#pragma pack` |
+| Force-inline                           | `__forceinline` (defined in `kit/ts_helpers.h` on POSIX) | `__attribute__((always_inline))` directly        |
+| Mark argument unused                   | `UNUSED_ARG(x)` (`kit/ts_helpers.h`) | `(void)x;`, `[[maybe_unused]]` in C code              |
+| Export symbol for shared lib           | `P7_EXPORT` / `KIT_API` (`kit/ts_helpers.h`, `kit/export.h`) | Raw `__declspec(dllexport)` / `__attribute__((visibility))` |
+| Unique identifier generator            | `MAKE_UNIQUE(x)` (`kit/ts_helpers.h`) | Hand-rolled `__COUNTER__` glue                        |
+| Stringify macro arg                    | `TOSTR(x)` / `STR_HELPER(x)` (`kit/ts_helpers.h`) | Local `#` / `##` helpers                          |
+
+## When std / libc / POSIX Is Still OK
+
+Use **only after** step 1 confirms kit doesn't cover it: `<cstdint>`, `<cstddef>`, `<atomic>`, `<chrono>`, `<thread>`, `<string>`, `<string_view>`, `<vector>`, `<array>`, `<unordered_map>`, `<unordered_set>`, `<cstdio>`, `<fstream>`, `printf`, `memcpy`, `memset`, `strlen`, platform-specific syscalls not wrapped by kit.
+
+**This list is tentative.** If kit adds coverage, the Decision Rule takes precedence.
+
+## Include Style
+
+- Use `kit/` prefix: `#include "kit/ts_helpers.h"`, `#include "kit/list.hpp"`.
+- Group kit includes together, after the module's own headers and before system headers.
+
+## Keeping In Sync
+
+If you discover kit now covers something the cheat sheet says is "still OK", use kit and tell the user the rule needs updating.
