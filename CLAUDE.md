@@ -59,7 +59,7 @@ All C/C++ functions that acquire releasable resources use the **single-exit goto
 - Cleanup section: idempotent, guarded release of each resource in reverse acquisition order.
 
 Reference implementation: `engine/p8_config.cpp::p8_config_read_file`.
-Full pattern specification: `.cursor/skills/p8-error-cleanup/SKILL.md`.
+Full pattern specification: `/p8-error-cleanup` skill (`.claude/skills/p8-error-cleanup/SKILL.md`).
 
 ## Code Style
 
