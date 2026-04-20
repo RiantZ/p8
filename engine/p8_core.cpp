@@ -25,7 +25,10 @@ extern "C"
         // be wired in later, once the schema is known.
         try
         {
-            (void)nlohmann::json::parse(ip_config->mp_json_config);
+            (void)nlohmann::json::parse(ip_config->mp_json_config,
+                                        /*callback=*/nullptr,
+                                        /*allow_exceptions=*/true,
+                                        /*ignore_comments=*/true);
         }
         catch(const nlohmann::json::parse_error &ir_err)
         {

@@ -1,0 +1,8 @@
+{
+    //supported values: file.bin, network.tcp
+    "sync": "file.bin",
+    //directory path or {IP v4/IP v5/host name}:port
+    "destination": "",
+    //internal buffer size in KB, MB, Ki, Mi
+    "buffer": "100KB"
+}
