@@ -106,10 +106,12 @@ lbl_exit:
     if(lp_file)
     {
         std::fclose(lp_file);
+        lp_file = nullptr;
     }
     if(lp_buf)
     {
         std::free(lp_buf);
+        lp_buf = nullptr;
     }
     return lp_result;
 }
@@ -126,6 +128,7 @@ lbl_exit:
 7. **No `return` before `lbl_exit`** inside the function body. Every exit path, including success, flows through the label. One-liner early returns in *pure input validation before any acquisition* are tolerated only when the function has not yet touched any resource and the declaration section is done — prefer `goto lbl_exit` even there for uniformity.
 8. **Order of releases in `lbl_exit` is the reverse of acquisitions** when one resource depends on another (e.g. `munmap` before `close` of the backing fd, `pthread_join` before freeing thread args). When there is no dependency, keep a stable, reproducible order (top of file to bottom, matching declaration order) so that diffs stay small.
 9. **Do not mix this pattern with C++ exceptions** inside the same function. If a callee can throw, either wrap it in `try { ... } catch(...) { log; goto lbl_exit; }` at the call site, or rewrite the function in RAII style (and then the whole `goto` scaffold goes away). Letting an exception fly past a partially-acquired state inside a `goto`-managed function leaks every resource already acquired.
+10. **Nullify every pointer / reset every handle immediately after releasing it.** After `delete p`, `std::free(p)`, `std::fclose(f)`, `::munmap(p, …)`, `::close(fd)`, or any other release call, the very next statement must set the variable back to its "unacquired" default (`nullptr`, `-1`, etc.). This prevents double-free / double-close bugs that surface when future edits add a second `goto lbl_exit` after the cleanup, or when shutdown logic calls the cleanup section more than once. The rule applies both in the `lbl_exit` cleanup section and in the normal function body (e.g. mid-body `delete` before a race-retry path).
 
 ## Logging
 
@@ -157,7 +160,8 @@ lp_buf    = nullptr;         // <-- key line: disown the buffer
 lbl_exit:
     if(lp_buf)
     {
-        std::free(lp_buf);   // fires on error, no-op on success
+        std::free(lp_buf);
+        lp_buf = nullptr;
     }
     return lp_result;
 ```
@@ -258,14 +262,17 @@ lbl_exit:
     if(lp_thing)
     {
         delete lp_thing;
+        lp_thing = nullptr;
     }
     if(lp_map)
     {
         ::munmap(lp_map, iz_len);
+        lp_map = nullptr;
     }
     if(li_fd >= 0)
     {
         ::close(li_fd);
+        li_fd = -1;
     }
     return lb_ok;
 }
@@ -334,6 +341,7 @@ Before finishing a function that uses this pattern, verify:
 - [ ] Every resource acquisition has exactly one matching guarded release in `lbl_exit`, in the reverse acquisition order when there is a dependency between resources.
 - [ ] Each release in `lbl_exit` is wrapped in `if(lp_xxx)` (or an equivalent acquired-check) so that early-jump paths — where some resources were never acquired — are safe.
 - [ ] Sentinel values returned by failed acquisitions (`MAP_FAILED`, `INVALID_HANDLE_VALUE`, negative fd, ...) are normalized to the same "unacquired" default used in the declaration, so the guarded release does not fire on them.
+- [ ] Every release (`delete`, `std::free`, `std::fclose`, `::munmap`, `::close`, ...) is immediately followed by resetting the variable to its "unacquired" default (`nullptr`, `-1`, etc.) — both in `lbl_exit` and in the function body.
 - [ ] If the function returns an owned resource: ownership transfer via `lp_result = lp_buf; lp_buf = nullptr;` is in place, OR the single-resource `lb_error` variant is used correctly.
 - [ ] No `return` statement inside the function body other than the terminal one after `lbl_exit:`.
 - [ ] Any callee that can throw a C++ exception is wrapped in `try { ... } catch(...) { log; goto lbl_exit; }` at the call site, so the cleanup section is not bypassed by a fly-through exception.
