@@ -3,6 +3,8 @@
     "sync": "file.bin",
     //directory path or {IP v4/IP v5/host name}:port
     "destination": "",
-    //internal buffer size in KB, MB, Ki, Mi
-    "buffer": "100KB"
+    //internal buffer size in KB, MB, Ki, Mi or infinit
+    "max_memory": "100KB",
+    "max_buffers_count": "256",
+    "max_preallocated_memory": "1MB"
 }
