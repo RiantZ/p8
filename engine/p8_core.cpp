@@ -169,6 +169,7 @@ lbl_exit:
         if(lb_error && lp_new)
         {
             delete lp_new;
+            lp_new = nullptr;
         }
 
         return !lb_error;
