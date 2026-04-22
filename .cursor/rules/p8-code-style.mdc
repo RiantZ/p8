@@ -15,6 +15,7 @@ Full reference: `doc/code_style.md`. Defaults are non-negotiable unless the user
 3. Preprocessor `#define` names are the **only** ALL_CAPS identifiers.
 4. C functions are prefixed with the module name (e.g. `p8_`). C++ class methods start with a verb (`do_`, `get_`, `set_`, `is_`, `create_`, ...).
 5. Format with the repo's `.clang-format` before finishing.
+6. Every function **definition** in `.c` / `.cpp` files is preceded by a separator line of 120 `/` characters.
 
 ## File Naming
 
@@ -81,6 +82,28 @@ Examples:
 - Static file-scope helpers in `.cpp` files: same as C++ methods — start with a verb, no module prefix needed (they are not public API).
 - Constructors/destructors follow class name (`c_my_class::c_my_class(...)`).
 
+## Function Separators
+
+Every function **definition** in `.c` / `.cpp` files must be preceded by a separator line of exactly 120 `/` characters:
+
+```cpp
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static bool parse_size(const char *ip_str, size_t &oz_result)
+{
+    ...
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool cp8_core::init_buffer_pool(const char *ip_max, const char *ip_init)
+{
+    ...
+}
+```
+
+Inside `extern "C"` blocks, the separator follows the same indentation as the function body.
+
+This rule applies to **function definitions** only (`.c`, `.cpp` files), not to declarations in headers.
+
 ## Preprocessor Defines
 
 ALL_CAPS is **exclusively** for `#define` macros. `static constexpr`, `const`, and `enum` values use normal lowercase prefixes:
@@ -121,6 +144,7 @@ public:
     bool do_process(const s_my_struct *ip_in, s_my_struct *op_out);
 };
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void my_function(c_my_class *&or_object)
 {
     or_object = new c_my_class(10);
@@ -139,6 +163,7 @@ void my_function(c_my_class *&or_object)
 - [ ] C++ methods begin with a verb (`acquire_x`, not `x_acquire`).
 - [ ] No invented type prefixes — only those listed in the Type Prefixes table.
 - [ ] `static constexpr` / `const` use lowercase with prefixes, not ALL_CAPS.
+- [ ] Every function definition in `.c` / `.cpp` is preceded by a 120-char `///...` separator.
 - [ ] Code is formatted with the project `.clang-format`.
 
 ## When in Doubt
