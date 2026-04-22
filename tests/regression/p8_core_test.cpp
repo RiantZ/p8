@@ -96,37 +96,37 @@ TEST_F(c_p8_core_test, buffer_pool_preallocated)
 {
     struct s_p8_config lo_config = {};
     lo_config.mp_json_config     = R"({
-        "max_memory_size": "10KB",
-        "max_buffers_count": "10",
+        "max_memory_size": "128KB",
+        "initial_memory_size": "64KB"
+    })";
+
+    EXPECT_TRUE(p8_initialize(&lo_config));
+    EXPECT_EQ(p8_test_get_buffer_size(), 8192u);
+    EXPECT_EQ(p8_test_get_free_buffers_count(), 8u);
+    EXPECT_EQ(p8_test_get_all_buffers_count(), 8u);
+    EXPECT_EQ(p8_test_get_total_allocated(), 65536u);
+}
+
+TEST_F(c_p8_core_test, buffer_pool_initial_clamped_to_max)
+{
+    struct s_p8_config lo_config = {};
+    lo_config.mp_json_config     = R"({
+        "max_memory_size": "16KB",
         "initial_memory_size": "2MB"
     })";
 
     EXPECT_TRUE(p8_initialize(&lo_config));
-    EXPECT_EQ(p8_test_get_buffer_size(), 1024u);
-    EXPECT_EQ(p8_test_get_free_buffers_count(), 10u);
-    EXPECT_EQ(p8_test_get_all_buffers_count(), 10u);
-}
-
-TEST_F(c_p8_core_test, buffer_pool_small_prealloc_allocates_all)
-{
-    struct s_p8_config lo_config = {};
-    lo_config.mp_json_config     = R"({
-        "max_memory_size": "10KB",
-        "max_buffers_count": "10",
-        "initial_memory_size": "500"
-    })";
-
-    EXPECT_TRUE(p8_initialize(&lo_config));
-    EXPECT_EQ(p8_test_get_free_buffers_count(), 10u);
+    EXPECT_EQ(p8_test_get_free_buffers_count(), 2u);
+    EXPECT_EQ(p8_test_get_all_buffers_count(), 2u);
+    EXPECT_EQ(p8_test_get_total_allocated(), 16384u);
 }
 
 TEST_F(c_p8_core_test, buffer_acquire_release)
 {
     struct s_p8_config lo_config = {};
     lo_config.mp_json_config     = R"({
-        "max_memory_size": "10KB",
-        "max_buffers_count": "10",
-        "initial_memory_size": "2MB"
+        "max_memory_size": "128KB",
+        "initial_memory_size": "64KB"
     })";
 
     EXPECT_TRUE(p8_initialize(&lo_config));
@@ -144,9 +144,8 @@ TEST_F(c_p8_core_test, buffer_acquire_on_demand)
 {
     struct s_p8_config lo_config = {};
     lo_config.mp_json_config     = R"({
-        "max_memory_size": "2KB",
-        "max_buffers_count": "2",
-        "initial_memory_size": "2MB"
+        "max_memory_size": "24KB",
+        "initial_memory_size": "16KB"
     })";
 
     EXPECT_TRUE(p8_initialize(&lo_config));
@@ -158,28 +157,31 @@ TEST_F(c_p8_core_test, buffer_acquire_on_demand)
     ASSERT_NE(lp_buf2, nullptr);
     EXPECT_EQ(p8_test_get_free_buffers_count(), 0u);
 
-    // limit reached — on-demand should fail
     uint8_t *lp_buf3 = p8_test_acquire_buffer();
-    EXPECT_EQ(lp_buf3, nullptr);
+    ASSERT_NE(lp_buf3, nullptr);
+    EXPECT_EQ(p8_test_get_all_buffers_count(), 3u);
+
+    uint8_t *lp_buf4 = p8_test_acquire_buffer();
+    EXPECT_EQ(lp_buf4, nullptr);
 
     p8_test_release_buffer(lp_buf1);
     p8_test_release_buffer(lp_buf2);
+    p8_test_release_buffer(lp_buf3);
 }
 
 TEST_F(c_p8_core_test, buffer_acquire_on_demand_within_limit)
 {
     struct s_p8_config lo_config = {};
     lo_config.mp_json_config     = R"({
-        "max_memory_size": "10MB",
-        "max_buffers_count": "100",
-        "initial_memory_size": "1MB"
+        "max_memory_size": "1MB",
+        "initial_memory_size": "64KB"
     })";
 
     EXPECT_TRUE(p8_initialize(&lo_config));
 
     size_t lz_pre_count = p8_test_get_free_buffers_count();
-    EXPECT_EQ(lz_pre_count, 10u);
-    EXPECT_EQ(p8_test_get_all_buffers_count(), 10u);
+    EXPECT_EQ(lz_pre_count, 8u);
+    EXPECT_EQ(p8_test_get_all_buffers_count(), 8u);
 
     // acquire all pre-allocated
     std::vector<uint8_t *> lo_bufs;
@@ -213,7 +215,6 @@ TEST_F(c_p8_core_test, buffer_concurrent_acquire_release)
     struct s_p8_config lo_config              = {};
     lo_config.mp_json_config                  = R"({
         "max_memory_size": "1MB",
-        "max_buffers_count": "1000",
         "initial_memory_size": "1MB"
     })";
 

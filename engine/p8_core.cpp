@@ -140,8 +140,7 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
 
     if(mz_initial_memory_size > mz_max_memory_size)
     {
-        std::fprintf(stderr, "cp8_core: initial_memory_size > max_memory_size\n");
-        return;
+        mz_initial_memory_size = mz_max_memory_size;
     }
 
     for(size_t lz_i = 0; lz_i < (mz_initial_memory_size / mz_buffer_size); ++lz_i)
