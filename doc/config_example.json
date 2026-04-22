@@ -1,10 +1,12 @@
 {
-    //supported values: file.bin, network.tcp
-    "sync": "file.bin",
-    //directory path or {IP v4/IP v5/host name}:port
+    //Library sink, supported values: file.bin, network.tcp
+    "sink": "file.bin",
+    //Sink destination: hdd/network path or {IP v4/IP v5/host name}:port
     "destination": "",
-    //internal buffer size in KB, MB, Ki, Mi or infinit
-    "max_memory": "100KB",
-    "max_buffers_count": "256",
-    "max_preallocated_memory": "1MB"
+    //Maximum memory size (in bytes) that the library is allowed to allocate. Memory starts at initial_memory_size and grows on demand up to this limit.
+    //For setting the size use suffix KB, MB, Ki, Mi or set infinit to use memory without limit (not reccomended)
+    "max_memory_size": "1MB",
+    //initial library memory allocation, 
+    //For setting the size use suffix KB, MB, Ki, Mi
+    "initial_memory_size": "128KB"
 }
