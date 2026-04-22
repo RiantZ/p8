@@ -6,8 +6,13 @@
 
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <exception>
+#include <limits>
+#include <strings.h>
 #include <new>
+#include <string>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // singleton state
@@ -19,11 +24,63 @@ static const tXCHAR         *gp_shm_name   = TM("p8");
 static std::atomic<uint32_t> gu_instance_count { 0 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// helpers
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static bool parse_size(const char *ip_str, size_t &oz_result)
+{
+    char   la_buf[128];
+    size_t lz_dst = 0;
+
+    for(size_t lz_i = 0; ip_str[lz_i] != '\0' && lz_dst < sizeof(la_buf) - 1; ++lz_i)
+    {
+        if(ip_str[lz_i] != ' ' && ip_str[lz_i] != '\t')
+        {
+            la_buf[lz_dst++] = ip_str[lz_i];
+        }
+    }
+    la_buf[lz_dst] = '\0';
+
+    if(strcasecmp(la_buf, "infinite") == 0)
+    {
+        oz_result = std::numeric_limits<size_t>::max();
+        return true;
+    }
+
+    char              *lp_end = nullptr;
+    unsigned long long lu_val = std::strtoull(la_buf, &lp_end, 10);
+
+    if(lp_end == la_buf)
+    {
+        return false;
+    }
+
+    if(*lp_end == '\0')
+    {
+        oz_result = static_cast<size_t>(lu_val);
+        return true;
+    }
+
+    if(strcasecmp(lp_end, "KB") == 0 || strcasecmp(lp_end, "Ki") == 0)
+    {
+        oz_result = static_cast<size_t>(lu_val * 1024);
+        return true;
+    }
+
+    if(strcasecmp(lp_end, "MB") == 0 || strcasecmp(lp_end, "Mi") == 0)
+    {
+        oz_result = static_cast<size_t>(lu_val * 1024 * 1024);
+        return true;
+    }
+
+    return false;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // cp8_core implementation
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 cp8_core::cp8_core(const struct s_p8_config *ip_config)
-    : mb_initialized(false)
 {
     gu_instance_count.fetch_add(1, std::memory_order_relaxed);
 
@@ -38,9 +95,9 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
     try
     {
         lo_json = nlohmann::json::parse(ip_config->mp_json_config,
-                                        /*callback=*/nullptr,
-                                        /*allow_exceptions=*/true,
-                                        /*ignore_comments=*/true);
+                                        nullptr, // callback
+                                        true,    // allow_exceptions
+                                        true);   // ignore_comments
     }
     catch(const nlohmann::json::parse_error &ir_err)
     {
@@ -53,7 +110,7 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
         return;
     }
 
-    if(lo_json.contains("sync"))
+    if(lo_json.contains("sink"))
     {
         // TODO: configure sync mode (file.bin, network.tcp)
     }
@@ -63,9 +120,41 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
         // TODO: configure destination path or network endpoint
     }
 
-    if(lo_json.contains("buffer"))
+    if(lo_json.contains("max_memory_size"))
     {
-        // TODO: configure internal buffer size
+        if(!parse_size(lo_json["max_memory_size"].get<std::string>().c_str(), mz_max_memory_size))
+        {
+            std::fprintf(stderr, "cp8_core: invalid max_memory_size value\n");
+            return;
+        }
+    }
+
+    if(lo_json.contains("initial_memory_size"))
+    {
+        if(!parse_size(lo_json["initial_memory_size"].get<std::string>().c_str(), mz_initial_memory_size))
+        {
+            std::fprintf(stderr, "cp8_core: invalid initial_memory_size value\n");
+            return;
+        }
+    }
+
+    if(mz_initial_memory_size > mz_max_memory_size)
+    {
+        std::fprintf(stderr, "cp8_core: initial_memory_size > max_memory_size\n");
+        return;
+    }
+
+    for(size_t lz_i = 0; lz_i < (mz_initial_memory_size / mz_buffer_size); ++lz_i)
+    {
+        uint8_t *lp_buf = new(std::nothrow) uint8_t[mz_buffer_size];
+        if(!lp_buf)
+        {
+            std::fprintf(stderr, "cp8_core: memory allocation failed\n");
+            break;
+        }
+        mo_free_buffers.push_last(lp_buf);
+        mo_all_buffers.push_last(lp_buf);
+        mz_total_allocated += mz_buffer_size;
     }
 
     mb_initialized = true;
@@ -73,6 +162,13 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
 
 cp8_core::~cp8_core()
 {
+    for(uint8_t *lp_buf : mo_all_buffers)
+    {
+        delete[] lp_buf;
+    }
+    mo_all_buffers.clear();
+    mo_free_buffers.clear();
+
     gu_instance_count.fetch_sub(1, std::memory_order_relaxed);
 }
 
@@ -102,6 +198,40 @@ p8_attr_id cp8_core::attr_register(const char *, enum e_p8_attr_type)
 p8_attr_id cp8_core::attr_get(const char *) const
 {
     return P8_ATTR_ERROR_NOT_IMPLEMENTED;
+}
+
+uint8_t *cp8_core::acquire_buffer()
+{
+    std::lock_guard<std::mutex> lo_lock(mo_pool_mutex);
+
+    if(mo_free_buffers.size() > 0)
+    {
+        return mo_free_buffers.pull_first();
+    }
+
+    // on-demand allocation
+    if(mz_total_allocated + mz_buffer_size <= mz_max_memory_size)
+    {
+        uint8_t *lp_buf = new(std::nothrow) uint8_t[mz_buffer_size];
+        if(lp_buf)
+        {
+            mo_all_buffers.push_last(lp_buf);
+            mz_total_allocated += mz_buffer_size;
+            return lp_buf;
+        }
+    }
+
+    return nullptr;
+}
+
+void cp8_core::release_buffer(uint8_t *ip_buffer)
+{
+    if(!ip_buffer)
+    {
+        return;
+    }
+    std::lock_guard<std::mutex> lo_lock(mo_pool_mutex);
+    mo_free_buffers.push_last(ip_buffer);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -257,6 +387,39 @@ void p8_test_reset()
 uint32_t p8_test_get_instance_count()
 {
     return gu_instance_count.load(std::memory_order_relaxed);
+}
+
+size_t p8_test_get_buffer_size()
+{
+    return gp_instance ? gp_instance->mz_buffer_size : 0;
+}
+
+size_t p8_test_get_free_buffers_count()
+{
+    return gp_instance ? gp_instance->mo_free_buffers.size() : 0;
+}
+
+size_t p8_test_get_total_allocated()
+{
+    return gp_instance ? gp_instance->mz_total_allocated : 0;
+}
+
+size_t p8_test_get_all_buffers_count()
+{
+    return gp_instance ? gp_instance->mo_all_buffers.size() : 0;
+}
+
+uint8_t *p8_test_acquire_buffer()
+{
+    return gp_instance ? gp_instance->acquire_buffer() : nullptr;
+}
+
+void p8_test_release_buffer(uint8_t *ip_buffer)
+{
+    if(gp_instance)
+    {
+        gp_instance->release_buffer(ip_buffer);
+    }
 }
 
 #endif // P8_TESTING
