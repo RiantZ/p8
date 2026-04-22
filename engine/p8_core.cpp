@@ -1,4 +1,5 @@
 #include "p8_core.hpp"
+#include "p8_json_keys.h"
 
 #include "kit/shared_mem.hpp"
 
@@ -110,31 +111,27 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
         return;
     }
 
-    if(lo_json.contains("sink"))
+    if(lo_json.contains(P8_CFG_KEY_SINK))
     {
         // TODO: configure sync mode (file.bin, network.tcp)
     }
 
-    if(lo_json.contains("destination"))
+    if(lo_json.contains(P8_CFG_KEY_DESTINATION))
     {
         // TODO: configure destination path or network endpoint
     }
 
-    std::string lo_max_mem_str;
-    std::string lo_init_mem_str;
     const char *lp_max_mem  = nullptr;
     const char *lp_init_mem = nullptr;
 
-    if(lo_json.contains("max_memory_size"))
+    if(lo_json.contains(P8_CFG_KEY_MAX_MEMORY_SIZE))
     {
-        lo_max_mem_str = lo_json["max_memory_size"].get<std::string>();
-        lp_max_mem     = lo_max_mem_str.c_str();
+        lp_max_mem = lo_json[P8_CFG_KEY_MAX_MEMORY_SIZE].get<std::string>().c_str();
     }
 
-    if(lo_json.contains("initial_memory_size"))
+    if(lo_json.contains(P8_CFG_KEY_INITIAL_MEMORY_SIZE))
     {
-        lo_init_mem_str = lo_json["initial_memory_size"].get<std::string>();
-        lp_init_mem     = lo_init_mem_str.c_str();
+        lp_init_mem = lo_json[P8_CFG_KEY_INITIAL_MEMORY_SIZE].get<std::string>().c_str();
     }
 
     if(!init_buffer_pool(lp_max_mem, lp_init_mem))
