@@ -120,21 +120,60 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
         // TODO: configure destination path or network endpoint
     }
 
+    std::string lo_max_mem_str;
+    std::string lo_init_mem_str;
+    const char *lp_max_mem  = nullptr;
+    const char *lp_init_mem = nullptr;
+
     if(lo_json.contains("max_memory_size"))
     {
-        if(!parse_size(lo_json["max_memory_size"].get<std::string>().c_str(), mz_max_memory_size))
-        {
-            std::fprintf(stderr, "cp8_core: invalid max_memory_size value\n");
-            return;
-        }
+        lo_max_mem_str = lo_json["max_memory_size"].get<std::string>();
+        lp_max_mem     = lo_max_mem_str.c_str();
     }
 
     if(lo_json.contains("initial_memory_size"))
     {
-        if(!parse_size(lo_json["initial_memory_size"].get<std::string>().c_str(), mz_initial_memory_size))
+        lo_init_mem_str = lo_json["initial_memory_size"].get<std::string>();
+        lp_init_mem     = lo_init_mem_str.c_str();
+    }
+
+    if(!init_buffer_pool(lp_max_mem, lp_init_mem))
+    {
+        return;
+    }
+
+    mb_initialized = true;
+}
+
+cp8_core::~cp8_core()
+{
+    for(uint8_t *lp_buf : mo_all_buffers)
+    {
+        delete[] lp_buf;
+    }
+    mo_all_buffers.clear();
+    mo_free_buffers.clear();
+
+    gu_instance_count.fetch_sub(1, std::memory_order_relaxed);
+}
+
+bool cp8_core::init_buffer_pool(const char *ip_max_memory_size, const char *ip_initial_memory_size)
+{
+    if(ip_max_memory_size)
+    {
+        if(!parse_size(ip_max_memory_size, mz_max_memory_size))
+        {
+            std::fprintf(stderr, "cp8_core: invalid max_memory_size value\n");
+            return false;
+        }
+    }
+
+    if(ip_initial_memory_size)
+    {
+        if(!parse_size(ip_initial_memory_size, mz_initial_memory_size))
         {
             std::fprintf(stderr, "cp8_core: invalid initial_memory_size value\n");
-            return;
+            return false;
         }
     }
 
@@ -156,19 +195,7 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
         mz_total_allocated += mz_buffer_size;
     }
 
-    mb_initialized = true;
-}
-
-cp8_core::~cp8_core()
-{
-    for(uint8_t *lp_buf : mo_all_buffers)
-    {
-        delete[] lp_buf;
-    }
-    mo_all_buffers.clear();
-    mo_free_buffers.clear();
-
-    gu_instance_count.fetch_sub(1, std::memory_order_relaxed);
+    return true;
 }
 
 bool cp8_core::get_initialized() const

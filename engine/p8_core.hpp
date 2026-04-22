@@ -37,6 +37,8 @@ public:
     cp8_core &operator=(cp8_core &&)      = delete;
 
 private:
+    bool init_buffer_pool(const char *ip_max_memory_size, const char *ip_initial_memory_size);
+
     bool mb_initialized                        = false;
 
     // config — buffer pool
