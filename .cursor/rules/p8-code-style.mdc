@@ -45,6 +45,8 @@ Single-letter prefix + `_` + lowercase name.
 | `l`    | function ptr / lambda| `typedef int (*l_cb)(int);`|
 | `h`    | handle / custom type | `typedef int32_t h_p8_id;`|
 
+**This table is exhaustive.** No other single-letter type prefixes exist. In particular there is no `a` for "array" — use `o` (object) for any STL container (`std::vector`, `std::map`, `kit::c_lst`, etc.).
+
 ## Variable Prefixes (access/visibility, then type)
 
 `<access><type>_name`
@@ -74,16 +76,19 @@ Examples:
 ## Functions
 
 - C function: `<module>_<verb>_<noun>` → `p8_register_current_thread`, `p8_mtk_emit`.
-- C++ method: starts with a verb in lowercase snake_case → `do_something`, `get_size`, `set_name`, `is_ready`.
+- C++ method: starts with a **verb** → `acquire_buffer`, `release_buffer`, `get_size`, `set_name`, `is_ready`.
+  - **Wrong:** `buffer_acquire` ❌, `size_get` ❌ — noun before verb violates the rule.
+- Static file-scope helpers in `.cpp` files: same as C++ methods — start with a verb, no module prefix needed (they are not public API).
 - Constructors/destructors follow class name (`c_my_class::c_my_class(...)`).
 
 ## Preprocessor Defines
 
-ALL_CAPS_WITH_UNDERSCORES. This is the **only** exception to the lowercase rule.
+ALL_CAPS is **exclusively** for `#define` macros. `static constexpr`, `const`, and `enum` values use normal lowercase prefixes:
 
 ```cpp
-#define P8_MAX_CHANNELS 64
-#define MY_DEFINE       0
+#define P8_MAX_CHANNELS 64                        // OK — #define
+static constexpr uint32_t lu_max_channels = 64;   // OK — constexpr
+static constexpr uint32_t LU_MAX_CHANNELS = 64;   // WRONG — not a #define
 ```
 
 ## Canonical Example
@@ -131,6 +136,9 @@ void my_function(c_my_class *&or_object)
 - [ ] No camelCase or PascalCase anywhere except inside untouched third-party code.
 - [ ] `#define`s are ALL_CAPS; no other identifier is.
 - [ ] C functions begin with the module prefix; C++ methods begin with a verb.
+- [ ] C++ methods begin with a verb (`acquire_x`, not `x_acquire`).
+- [ ] No invented type prefixes — only those listed in the Type Prefixes table.
+- [ ] `static constexpr` / `const` use lowercase with prefixes, not ALL_CAPS.
 - [ ] Code is formatted with the project `.clang-format`.
 
 ## When in Doubt
