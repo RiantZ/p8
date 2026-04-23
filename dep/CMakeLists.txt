@@ -18,6 +18,19 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+# xxHash -- header-only usage (Variant A). Only xxhash.h is needed; no compiled library.
+# No CMakeLists.txt at repo root, so MakeAvailable just downloads without configuring.
+FetchContent_Declare(
+    xxhash
+    GIT_REPOSITORY https://github.com/Cyan4973/xxHash.git
+    GIT_TAG        v0.8.3
+)
+FetchContent_MakeAvailable(xxhash)
+
+add_library(xxhash_hdr INTERFACE)
+add_library(xxhash::xxhash ALIAS xxhash_hdr)
+target_include_directories(xxhash_hdr INTERFACE ${xxhash_SOURCE_DIR})
+
 if(NOT IS_SYMLINK "${CMAKE_CURRENT_SOURCE_DIR}/kit")
     file(CREATE_LINK
         ${kit_SOURCE_DIR}
