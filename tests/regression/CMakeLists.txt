@@ -19,6 +19,7 @@ add_executable(${PROJECT_NAME}
     main.cpp
     p8_config_test.cpp
     p8_core_test.cpp
+    p8_xxh_test.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${P8_API} ${CMAKE_SOURCE_DIR}/engine)
@@ -26,7 +27,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${P8_API} ${CMAKE_SOURCE_DIR}
 target_compile_definitions(p8 PRIVATE P8_TESTING)
 target_compile_definitions(${PROJECT_NAME} PRIVATE P8_TESTING)
 
-target_link_libraries(${PROJECT_NAME} gtest_main p8 kit::kit)
+target_link_libraries(${PROJECT_NAME} gtest_main p8 kit::kit xxhash::xxhash)
 
 add_test(NAME P8_RegressionTests COMMAND P8_RegressionTests)
 
