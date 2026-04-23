@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#define P8_XXH3_LOG_HASH(ip_file_name, ii_file_line, ou_hash)                                                         \
+#define P8_GET_LOG_HASH(ip_file_name, ii_file_line, ou_hash)                                                          \
     do                                                                                                                \
     {                                                                                                                 \
         XXH3_state_t lo_xxh_state_;                                                                                   \
