@@ -7,6 +7,9 @@
 #include <cstdint>
 #include <mutex>
 #include <vector>
+// 3 Classes for logs, traces and metrics living on thread local
+//
+//
 
 class cp8_core
 {

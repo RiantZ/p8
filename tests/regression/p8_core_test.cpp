@@ -1,6 +1,6 @@
 #include "p8_client_api.h"
 #include "p8_core.hpp"
-#include "p8_json_keys.h"
+#include "p8_config_keys.hpp"
 
 #include <gtest/gtest.h>
 
