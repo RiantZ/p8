@@ -3,9 +3,12 @@ add_library(p8 STATIC
             "${P8_API}/p8_config.h"
             p8_core.hpp
             p8_core.cpp
+            p8_log.hpp
             p8_log.cpp
-            p8_trc.cpp
+            p8_mtk.hpp
             p8_mtk.cpp
+            p8_trc.hpp
+            p8_trc.cpp
             p8_config.cpp
             )
 

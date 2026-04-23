@@ -7,9 +7,8 @@
 #include <cstdint>
 #include <mutex>
 #include <vector>
-// 3 Classes for logs, traces and metrics living on thread local
-//
-//
+
+#define P8_CORE_ACQUIRE_TIMEOUT_MS 100
 
 class cp8_core
 {
