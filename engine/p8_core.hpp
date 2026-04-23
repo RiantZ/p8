@@ -18,8 +18,9 @@ public:
     ~cp8_core();
 
     // core
-    bool get_initialized() const;
-    void exceptional_flush();
+    static cp8_core *get_global_core(uint32_t iu_timeoutms);
+    bool             get_initialized() const;
+    void             exceptional_flush();
 
     // thread
     bool register_current_thread(const char *ip_name);

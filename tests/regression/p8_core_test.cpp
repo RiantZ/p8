@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <latch>
 #include <thread>
 #include <vector>
@@ -250,4 +251,34 @@ TEST_F(c_p8_core_test, buffer_concurrent_acquire_release)
 
     EXPECT_EQ(p8_test_get_free_buffers_count(), lz_initial_free);
     EXPECT_EQ(p8_test_get_all_buffers_count(), lz_initial_free);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// get_global_core tests
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+TEST_F(c_p8_core_test, get_global_core_after_init)
+{
+    struct s_p8_config lo_config = {};
+    lo_config.mp_json_config     = "{}";
+
+    EXPECT_TRUE(p8_initialize(&lo_config));
+
+    cp8_core *lp_core = cp8_core::get_global_core(0);
+    EXPECT_NE(lp_core, nullptr);
+    EXPECT_TRUE(lp_core->get_initialized());
+}
+
+TEST_F(c_p8_core_test, get_global_core_timeout_no_init)
+{
+    auto lo_start     = std::chrono::steady_clock::now();
+
+    cp8_core *lp_core = cp8_core::get_global_core(50);
+
+    auto lo_elapsed
+        = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - lo_start);
+
+    EXPECT_EQ(lp_core, nullptr);
+    EXPECT_GE(lo_elapsed.count(), 50);
+    EXPECT_LE(lo_elapsed.count(), 200);
 }

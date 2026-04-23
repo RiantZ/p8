@@ -12,8 +12,10 @@
 #include <exception>
 #include <limits>
 #include <strings.h>
+#include <chrono>
 #include <new>
 #include <string>
+#include <thread>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // singleton state
@@ -267,6 +269,40 @@ void cp8_core::release_buffer(uint8_t *ip_buffer)
     }
     std::lock_guard<std::mutex> lo_lock(mo_pool_mutex);
     mo_free_buffers.push_last(ip_buffer);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+cp8_core *cp8_core::get_global_core(uint32_t iu_timeoutms)
+{
+    if(gp_instance)
+    {
+        return gp_instance;
+    }
+
+    uint32_t lu_elapsed = 0;
+
+    while(lu_elapsed < iu_timeoutms)
+    {
+        cp8_core       *lp_found = nullptr;
+        c_shared::h_sem lp_sem   = nullptr;
+
+        if(c_shared::lock(gp_shm_name, lp_sem, 10) == c_shared::e_ok)
+        {
+            c_shared::read(gp_shm_name, &lp_found, sizeof(lp_found));
+            c_shared::unlock(lp_sem);
+        }
+
+        if(lp_found)
+        {
+            gp_instance = lp_found;
+            return gp_instance;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        lu_elapsed += 10;
+    }
+
+    return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
