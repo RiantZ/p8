@@ -9,7 +9,7 @@ add_library(p8 STATIC
             p8_mtk.cpp
             p8_trc.hpp
             p8_trc.cpp
-            p8_xxh.hpp
+            p8_hash.hpp
             p8_config.cpp
             )
 
