@@ -36,15 +36,11 @@ extern "C"
 #define P8_ARG_TYPE_LDOUBLE 0x0E
 #define P8_ARGS_TYPE_COUNT  0x0F
 
-    PRAGMA_PACK_ENTER(2)
-
     struct sP7Trace_Arg
     {
         uint8_t mu_type;
         uint8_t mu_size;
-    } ATTR_PACK(2);
-
-    PRAGMA_PACK_EXIT()
+    };
 
     size_t log_parse_format_string(struct sP7Trace_Arg *op_args, size_t iz_args_max, const char *ip_format);
 
