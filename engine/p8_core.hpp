@@ -5,10 +5,13 @@
 #include "kit/list.hpp"
 
 #include <cstdint>
+#include <map>
 #include <mutex>
 #include <vector>
 
 #define P8_CORE_ACQUIRE_TIMEOUT_MS 100
+
+struct s_p8_log_desc;
 
 class cp8_core
 {
@@ -30,8 +33,16 @@ public:
     p8_attr_id attr_get(const char *ip_name) const;
 
     // buffer pool
-    uint8_t *acquire_buffer();
-    void     release_buffer(uint8_t *ip_buffer);
+    static size_t get_buffer_size();
+    uint8_t      *acquire_buffer();
+    void          release_buffer(uint8_t *ip_buffer);
+
+    // log descriptors
+    struct s_p8_log_desc *resolve_log_desc(uint64_t    iu_hash,
+                                           const char *ip_file,
+                                           uint32_t    iu_line,
+                                           const char *ip_function,
+                                           const char *ip_format);
 
     // non-copyable, non-movable
     cp8_core(const cp8_core &)            = delete;
@@ -54,6 +65,10 @@ private:
     kit::c_lst<uint8_t *> mo_all_buffers;
     size_t                mz_total_allocated;
     std::mutex            mo_pool_mutex;
+
+    // log descriptor registry (global, shared across all TLS cp8_log instances)
+    std::map<uint64_t, struct s_p8_log_desc *> mo_log_descs;
+    std::mutex                                 mo_log_desc_mutex;
 
 #ifdef P8_TESTING
     friend size_t p8_test_get_buffer_size();

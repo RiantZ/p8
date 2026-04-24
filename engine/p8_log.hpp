@@ -3,28 +3,27 @@
 #include "p8_core.hpp"
 #include "p8_protocol.h"
 
+#include "kit/spin_lock.hpp"
+
+#include <map>
+
+struct s_p8_log_desc
+{
+    uint64_t              mu_hash;
+    const char           *mp_format;
+    const char           *mp_file;
+    const char           *mp_function;
+    uint32_t              mu_line;
+    size_t                mz_args_count;
+    size_t                mz_fixed_args_size;
+    struct s_p8_trace_arg ma_args[P8_LOG_MAX_ARGS];
+};
+
 class cp8_log
 {
 public:
-    // log item descriptor
-    //  format string
-    //  file path
-    //  file line
-    //  function
-    //  args list
-    //  id
-    //  module id
-    // log item:
-    //  id
-    //  time
-    //  serialized args
-    //  level
-    //  processor
-    //  thread
-    //  module id
-    //
-public:
     cp8_log();
+    ~cp8_log();
 
     void            set_verbosity(p_p8_module ip_module, enum e_p8_level ie_verbosity);
     enum e_p8_level get_verbosity(p_p8_module ip_module);
@@ -57,5 +56,10 @@ public:
     static size_t parse_format_string(struct s_p8_trace_arg *op_args, size_t iz_args_max, const char *ip_format);
 
 private:
-    cp8_core *mp_core = nullptr;
+    cp8_core                                  *mp_core = nullptr;
+    kit::c_spin_lock                           mo_lock;
+    uint8_t                                   *mp_buffer = nullptr;
+    size_t                                     mz_offset = 0;
+    std::map<uint64_t, struct s_p8_log_desc *> mo_desc_map;
+    uint32_t                                   mu_thread_id = 0;
 };

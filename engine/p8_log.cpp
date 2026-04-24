@@ -1,8 +1,12 @@
 #include "p8_log.hpp"
+#include "p8_hash.hpp"
 #include "p8_protocol.h"
 
+#include <chrono>
+#include <functional>
 #include <stdint.h>
 #include <string.h>
+#include <thread>
 #include <wchar.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -345,7 +349,18 @@ static thread_local cp8_log go_tls_log;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 cp8_log::cp8_log()
     : mp_core(cp8_core::get_global_core(P8_CORE_ACQUIRE_TIMEOUT_MS))
+    , mu_thread_id(static_cast<uint32_t>(std::hash<std::thread::id> {}(std::this_thread::get_id())))
 {
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+cp8_log::~cp8_log()
+{
+    if(mp_buffer && mp_core)
+    {
+        mp_core->release_buffer(mp_buffer);
+        mp_buffer = nullptr;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -382,6 +397,93 @@ p_p8_module cp8_log::find_module(const char *ip_name)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static bool is_string_arg(uint8_t iu_type)
+{
+    return iu_type == P8_ARG_TYPE_USTR8 || iu_type == P8_ARG_TYPE_USTR16 || iu_type == P8_ARG_TYPE_USTR32
+           || iu_type == P8_ARG_TYPE_STRA;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static size_t serialize_utf8_string(uint8_t *op_dst, size_t iz_avail, const char *ip_str)
+{
+    uint16_t lu_len = 0;
+
+    if(ip_str)
+    {
+        size_t lz_slen = strlen(ip_str) + 1;
+        lu_len         = (lz_slen > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_slen);
+    }
+
+    if(sizeof(lu_len) + lu_len > iz_avail)
+    {
+        return 0;
+    }
+
+    memcpy(op_dst, &lu_len, sizeof(lu_len));
+    if(lu_len)
+    {
+        memcpy(op_dst + sizeof(lu_len), ip_str, lu_len);
+    }
+
+    return sizeof(lu_len) + lu_len;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static size_t serialize_wide_string(uint8_t *op_dst, size_t iz_avail, const wchar_t *ip_str)
+{
+    uint16_t lu_len = 0;
+
+    if(ip_str)
+    {
+        size_t lz_bytes = (wcslen(ip_str) + 1) * sizeof(wchar_t);
+        lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
+    }
+
+    if(sizeof(lu_len) + lu_len > iz_avail)
+    {
+        return 0;
+    }
+
+    memcpy(op_dst, &lu_len, sizeof(lu_len));
+    if(lu_len)
+    {
+        memcpy(op_dst + sizeof(lu_len), ip_str, lu_len);
+    }
+
+    return sizeof(lu_len) + lu_len;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static size_t serialize_u16_string(uint8_t *op_dst, size_t iz_avail, const uint16_t *ip_str)
+{
+    uint16_t lu_len = 0;
+
+    if(ip_str)
+    {
+        size_t lz_chars = 0;
+        while(ip_str[lz_chars])
+        {
+            lz_chars++;
+        }
+        size_t lz_bytes = (lz_chars + 1) * sizeof(uint16_t);
+        lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
+    }
+
+    if(sizeof(lu_len) + lu_len > iz_avail)
+    {
+        return 0;
+    }
+
+    memcpy(op_dst, &lu_len, sizeof(lu_len));
+    if(lu_len)
+    {
+        memcpy(op_dst + sizeof(lu_len), ip_str, lu_len);
+    }
+
+    return sizeof(lu_len) + lu_len;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool cp8_log::send(enum e_p8_level             ie_level,
                    p_p8_module                 ip_module,
                    uint64_t                    iu_trace_id,
@@ -393,17 +495,218 @@ bool cp8_log::send(enum e_p8_level             ie_level,
                    const char                 *ip_format,
                    va_list                     io_args)
 {
-    (void)ie_level;
+    struct s_p8_log_desc     *lp_desc    = nullptr;
+    struct s_p8_log_item_hdr *lp_hdr     = nullptr;
+    uint64_t                  lu_hash    = 0;
+    size_t                    lz_buf_sz  = 0;
+    size_t                    lz_avail   = 0;
+    uint8_t                  *lp_dst     = nullptr;
+    uint8_t                  *lp_buf_end = nullptr;
+    bool                      lb_result  = false;
+
     (void)ip_module;
-    (void)iu_trace_id;
-    (void)iu_line;
-    (void)ip_file;
-    (void)ip_function;
-    (void)iz_attrs;
-    (void)ip_attrs;
-    (void)ip_format;
-    (void)io_args;
-    return false;
+
+    std::lock_guard<kit::c_spin_lock> lo_guard(mo_lock);
+
+    if(!mp_core)
+    {
+        return false;
+    }
+
+    lz_buf_sz = cp8_core::get_buffer_size();
+
+    // buffer availability check
+    lz_avail  = mp_buffer ? (lz_buf_sz - mz_offset) : 0;
+    if(lz_avail < P8_LOG_MIN_BUFFER_SPACE)
+    {
+        if(mp_buffer)
+        {
+            mp_core->release_buffer(mp_buffer);
+            mp_buffer = nullptr;
+            mz_offset = 0;
+        }
+
+        mp_buffer = mp_core->acquire_buffer();
+        if(!mp_buffer)
+        {
+            return false;
+        }
+
+        mz_offset = 0;
+        lz_avail  = lz_buf_sz;
+    }
+
+    // compute hash from file + line
+    lu_hash = P8_GET_LOG_HASH(ip_file, iu_line);
+
+    // local descriptor lookup (TLS-only, no lock needed)
+    {
+        auto lo_it = mo_desc_map.find(lu_hash);
+        if(lo_it != mo_desc_map.end())
+        {
+            lp_desc = lo_it->second;
+        }
+        else
+        {
+            lp_desc = mp_core->resolve_log_desc(lu_hash, ip_file, iu_line, ip_function, ip_format);
+            if(!lp_desc)
+            {
+                return false;
+            }
+            mo_desc_map[lu_hash] = lp_desc;
+        }
+    }
+
+    // verify buffer space for header + fixed-size args at minimum
+    if(lz_avail < sizeof(struct s_p8_log_item_hdr) + lp_desc->mz_fixed_args_size)
+    {
+        return false;
+    }
+
+    // write item header
+    lp_hdr          = reinterpret_cast<struct s_p8_log_item_hdr *>(mp_buffer + mz_offset);
+    lp_hdr->mu_hash = lu_hash;
+    lp_hdr->mu_timestamp_ns
+        = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch() / std::chrono::nanoseconds(1));
+    lp_hdr->mu_trace_id    = iu_trace_id;
+    lp_hdr->mu_thread_id   = mu_thread_id;
+    lp_hdr->mu_level       = static_cast<uint8_t>(ie_level);
+    lp_hdr->mu_processor   = 0; // TODO: platform-specific CPU core ID
+    lp_hdr->mu_attrs_count = static_cast<uint8_t>(iz_attrs > 255 ? 255 : iz_attrs);
+    memset(lp_hdr->mu_padding, 0, sizeof(lp_hdr->mu_padding));
+
+    lp_dst     = mp_buffer + mz_offset + sizeof(struct s_p8_log_item_hdr);
+    lp_buf_end = mp_buffer + lz_buf_sz;
+
+    // serialize variable arguments guided by the descriptor
+    for(size_t lz_i = 0; lz_i < lp_desc->mz_args_count; lz_i++)
+    {
+        const struct s_p8_trace_arg *lp_arg = &lp_desc->ma_args[lz_i];
+
+        if(is_string_arg(lp_arg->mu_type))
+        {
+            size_t lz_written = 0;
+            size_t lz_remain  = static_cast<size_t>(lp_buf_end - lp_dst);
+
+            switch(lp_arg->mu_type)
+            {
+            case P8_ARG_TYPE_USTR8:
+            case P8_ARG_TYPE_STRA:
+            {
+                const char *lp_str = va_arg(io_args, const char *);
+                lz_written         = serialize_utf8_string(lp_dst, lz_remain, lp_str);
+                break;
+            }
+            case P8_ARG_TYPE_USTR16:
+            {
+                const uint16_t *lp_str = va_arg(io_args, const uint16_t *);
+                lz_written             = serialize_u16_string(lp_dst, lz_remain, lp_str);
+                break;
+            }
+            case P8_ARG_TYPE_USTR32:
+            {
+                const wchar_t *lp_str = va_arg(io_args, const wchar_t *);
+                lz_written            = serialize_wide_string(lp_dst, lz_remain, lp_str);
+                break;
+            }
+            default:
+                break;
+            }
+
+            if(0 == lz_written)
+            {
+                goto lbl_finalize;
+            }
+            lp_dst += lz_written;
+        }
+        else
+        {
+            if(lp_dst + lp_arg->mu_size > lp_buf_end)
+            {
+                goto lbl_finalize;
+            }
+
+            switch(lp_arg->mu_type)
+            {
+            case P8_ARG_TYPE_INT8: // == P8_ARG_TYPE_CHAR
+            case P8_ARG_TYPE_CHAR16:
+            case P8_ARG_TYPE_CHAR32:
+            case P8_ARG_TYPE_INT16:
+            case P8_ARG_TYPE_INT32:
+            {
+                uint32_t lu_val = va_arg(io_args, uint32_t);
+                memcpy(lp_dst, &lu_val, sizeof(lu_val));
+                break;
+            }
+            case P8_ARG_TYPE_INT64:
+            {
+                uint64_t lu_val = va_arg(io_args, uint64_t);
+                memcpy(lp_dst, &lu_val, sizeof(lu_val));
+                break;
+            }
+            case P8_ARG_TYPE_DOUBLE:
+            {
+                double ld_val = va_arg(io_args, double);
+                memcpy(lp_dst, &ld_val, sizeof(ld_val));
+                break;
+            }
+            case P8_ARG_TYPE_LDOUBLE:
+            {
+                long double ld_val = va_arg(io_args, long double);
+                memcpy(lp_dst, &ld_val, sizeof(ld_val));
+                break;
+            }
+            case P8_ARG_TYPE_PVOID:
+            {
+                void *lp_val = va_arg(io_args, void *);
+                memcpy(lp_dst, &lp_val, sizeof(lp_val));
+                break;
+            }
+            case P8_ARG_TYPE_INTMAX:
+            {
+                uintmax_t lu_val = va_arg(io_args, uintmax_t);
+                memcpy(lp_dst, &lu_val, sizeof(lu_val));
+                break;
+            }
+            default:
+                break;
+            }
+
+            lp_dst += lp_arg->mu_size;
+        }
+    }
+
+lbl_finalize:
+    lp_hdr->mu_args_size = static_cast<uint16_t>(lp_dst - (mp_buffer + mz_offset + sizeof(struct s_p8_log_item_hdr)));
+
+    // serialize attributes: attr_id (4 bytes) + raw union value (8 bytes) per attr
+    for(size_t lz_i = 0; lz_i < iz_attrs && ip_attrs; lz_i++)
+    {
+        if(lp_dst + sizeof(p8_attr_id) + sizeof(uint64_t) > lp_buf_end)
+        {
+            lp_hdr->mu_attrs_count = static_cast<uint8_t>(lz_i);
+            break;
+        }
+
+        memcpy(lp_dst, &ip_attrs[lz_i].m_id, sizeof(p8_attr_id));
+        lp_dst += sizeof(p8_attr_id);
+        memcpy(lp_dst, &ip_attrs[lz_i].mu_u64, sizeof(uint64_t));
+        lp_dst += sizeof(uint64_t);
+    }
+
+    lp_hdr->mu_size = static_cast<uint16_t>(lp_dst - (mp_buffer + mz_offset));
+    mz_offset       = static_cast<size_t>(lp_dst - mp_buffer);
+    lb_result       = true;
+
+    // post-check: if remaining buffer < P8_LOG_MIN_BUFFER_SPACE, return it to pool
+    if(lz_buf_sz - mz_offset < P8_LOG_MIN_BUFFER_SPACE)
+    {
+        mp_core->release_buffer(mp_buffer);
+        mp_buffer = nullptr;
+        mz_offset = 0;
+    }
+
+    return lb_result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

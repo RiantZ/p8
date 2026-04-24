@@ -1,5 +1,6 @@
 #include "p8_core.hpp"
 #include "p8_config_keys.hpp"
+#include "p8_log.hpp"
 
 #include "kit/shared_mem.hpp"
 
@@ -149,6 +150,12 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 cp8_core::~cp8_core()
 {
+    for(auto &lo_pair : mo_log_descs)
+    {
+        delete lo_pair.second;
+    }
+    mo_log_descs.clear();
+
     for(uint8_t *lp_buf : mo_all_buffers)
     {
         delete[] lp_buf;
@@ -269,6 +276,55 @@ void cp8_core::release_buffer(uint8_t *ip_buffer)
     }
     std::lock_guard<std::mutex> lo_lock(mo_pool_mutex);
     mo_free_buffers.push_last(ip_buffer);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+size_t cp8_core::get_buffer_size()
+{
+    return mz_buffer_size;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct s_p8_log_desc *cp8_core::resolve_log_desc(uint64_t    iu_hash,
+                                                 const char *ip_file,
+                                                 uint32_t    iu_line,
+                                                 const char *ip_function,
+                                                 const char *ip_format)
+{
+    std::lock_guard<std::mutex> lo_lock(mo_log_desc_mutex);
+
+    auto lo_it = mo_log_descs.find(iu_hash);
+    if(lo_it != mo_log_descs.end())
+    {
+        return lo_it->second;
+    }
+
+    struct s_p8_log_desc *lp_desc = new(std::nothrow) struct s_p8_log_desc;
+    if(!lp_desc)
+    {
+        return nullptr;
+    }
+
+    lp_desc->mu_hash            = iu_hash;
+    lp_desc->mp_format          = ip_format;
+    lp_desc->mp_file            = ip_file;
+    lp_desc->mp_function        = ip_function;
+    lp_desc->mu_line            = iu_line;
+    lp_desc->mz_args_count      = cp8_log::parse_format_string(lp_desc->ma_args, P8_LOG_MAX_ARGS, ip_format);
+
+    lp_desc->mz_fixed_args_size = 0;
+    for(size_t lz_i = 0; lz_i < lp_desc->mz_args_count; lz_i++)
+    {
+        uint8_t lu_type = lp_desc->ma_args[lz_i].mu_type;
+        if(lu_type != P8_ARG_TYPE_USTR8 && lu_type != P8_ARG_TYPE_USTR16 && lu_type != P8_ARG_TYPE_USTR32
+           && lu_type != P8_ARG_TYPE_STRA)
+        {
+            lp_desc->mz_fixed_args_size += lp_desc->ma_args[lz_i].mu_size;
+        }
+    }
+
+    mo_log_descs[iu_hash] = lp_desc;
+    return lp_desc;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
