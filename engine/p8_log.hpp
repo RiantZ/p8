@@ -54,7 +54,7 @@ public:
                   const char                **ip_format,
                   va_list                    *ip_va_list);
 
-    static size_t parse_format_string(struct sP7Trace_Arg *op_args, size_t iz_args_max, const char *ip_format);
+    static size_t parse_format_string(struct s_p8_trace_arg *op_args, size_t iz_args_max, const char *ip_format);
 
 private:
     cp8_core *mp_core = nullptr;

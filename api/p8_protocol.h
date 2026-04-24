@@ -36,7 +36,7 @@ extern "C"
 #define P8_ARG_TYPE_LDOUBLE 0x0E
 #define P8_ARGS_TYPE_COUNT  0x0F
 
-    struct sP7Trace_Arg
+    struct s_p8_trace_arg
     {
         uint8_t mu_type;
         uint8_t mu_size;
