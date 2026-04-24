@@ -64,7 +64,7 @@ static const struct s_prefix_desc *find_prefix(const char *ip_fmt)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-size_t log_parse_format_string(struct sP7Trace_Arg *op_args, size_t iz_args_max, const char *ip_format)
+size_t cp8_log::parse_format_string(struct sP7Trace_Arg *op_args, size_t iz_args_max, const char *ip_format)
 {
     size_t             lz_count     = 0;
     const char        *lp_iter      = ip_format;

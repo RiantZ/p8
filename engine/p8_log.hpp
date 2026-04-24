@@ -1,6 +1,7 @@
 #pragma once
 
 #include "p8_core.hpp"
+#include "p8_protocol.h"
 
 class cp8_log
 {
@@ -52,6 +53,8 @@ public:
                   const struct s_p8_attr_val *ip_attrs,
                   const char                **ip_format,
                   va_list                    *ip_va_list);
+
+    static size_t parse_format_string(struct sP7Trace_Arg *op_args, size_t iz_args_max, const char *ip_format);
 
 private:
     cp8_core *mp_core = nullptr;

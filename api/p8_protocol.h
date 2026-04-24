@@ -42,8 +42,6 @@ extern "C"
         uint8_t mu_size;
     };
 
-    size_t log_parse_format_string(struct sP7Trace_Arg *op_args, size_t iz_args_max, const char *ip_format);
-
 #ifdef __cplusplus
 }
 #endif

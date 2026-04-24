@@ -1,4 +1,4 @@
-#include "p8_protocol.h"
+#include "p8_log.hpp"
 
 #include <gtest/gtest.h>
 #include <climits>
@@ -17,12 +17,12 @@ protected:
 
     size_t parse(const char *ip_fmt)
     {
-        return log_parse_format_string(mo_args, MAX_ARGS, ip_fmt);
+        return cp8_log::parse_format_string(mo_args, MAX_ARGS, ip_fmt);
     }
 
     size_t parse_limited(const char *ip_fmt, size_t iz_max)
     {
-        return log_parse_format_string(mo_args, iz_max, ip_fmt);
+        return cp8_log::parse_format_string(mo_args, iz_max, ip_fmt);
     }
 };
 
@@ -431,7 +431,7 @@ TEST_F(c_log_format_test, ten_ints)
 
 TEST_F(c_log_format_test, null_format)
 {
-    EXPECT_EQ(log_parse_format_string(mo_args, MAX_ARGS, NULL), 0u);
+    EXPECT_EQ(cp8_log::parse_format_string(mo_args, MAX_ARGS, NULL), 0u);
 }
 
 TEST_F(c_log_format_test, zero_max_args)
