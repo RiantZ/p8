@@ -20,6 +20,7 @@ add_executable(${PROJECT_NAME}
     p8_config_test.cpp
     p8_core_test.cpp
     p8_xxh_test.cpp
+    p8_log_format_test.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${P8_API} ${CMAKE_SOURCE_DIR}/engine)
