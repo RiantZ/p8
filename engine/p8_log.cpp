@@ -1,4 +1,344 @@
 #include "p8_log.hpp"
+#include "p8_protocol.h"
+
+#include <stdint.h>
+#include <string.h>
+#include <wchar.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+enum e_prefix_type
+{
+    e_prefix_i64 = 0,
+    e_prefix_i32,
+    e_prefix_ll,
+    e_prefix_l,
+    e_prefix_hh,
+    e_prefix_h,
+    e_prefix_i,
+    e_prefix_w,
+    e_prefix_j,
+    e_prefix_upper_l,
+    e_prefix_unknown
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct s_prefix_desc
+{
+    const char        *mp_prefix;
+    uint32_t           mu_len;
+    enum e_prefix_type me_type;
+};
+
+// longest-match-first order is critical
+static const struct s_prefix_desc gs_prefixes[] = {
+    { "I64", 3, e_prefix_i64     },
+    { "I32", 3, e_prefix_i32     },
+    { "ll",  2, e_prefix_ll      },
+    { "hh",  2, e_prefix_hh      },
+    { "h",   1, e_prefix_h       },
+    { "l",   1, e_prefix_l       },
+    { "L",   1, e_prefix_upper_l },
+    { "I",   1, e_prefix_i       },
+    { "z",   1, e_prefix_i       },
+    { "t",   1, e_prefix_i       },
+    { "w",   1, e_prefix_w       },
+    { "j",   1, e_prefix_j       },
+    { NULL,  0, e_prefix_unknown }
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static const struct s_prefix_desc *find_prefix(const char *ip_fmt)
+{
+    const struct s_prefix_desc *lp_cur = &gs_prefixes[0];
+
+    while(lp_cur->mu_len)
+    {
+        if(0 == strncmp(ip_fmt, lp_cur->mp_prefix, lp_cur->mu_len))
+        {
+            return lp_cur;
+        }
+        lp_cur++;
+    }
+
+    return NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+size_t log_parse_format_string(struct sP7Trace_Arg *op_args, size_t iz_args_max, const char *ip_format)
+{
+    size_t             lz_count     = 0;
+    const char        *lp_iter      = ip_format;
+    bool               lb_percent   = false;
+    enum e_prefix_type le_prefix    = e_prefix_unknown;
+    uint8_t            lu_has_width = 0;
+
+    if(!ip_format || !op_args || 0 == iz_args_max)
+    {
+        return 0;
+    }
+
+    while(*lp_iter)
+    {
+        if(!lb_percent)
+        {
+            if('%' == *lp_iter)
+            {
+                lb_percent   = true;
+                le_prefix    = e_prefix_unknown;
+                lu_has_width = 0;
+            }
+        }
+        else
+        {
+            switch(*lp_iter)
+            {
+            case '*':
+            {
+                if(lz_count >= iz_args_max)
+                {
+                    return lz_count;
+                }
+                op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
+                lz_count++;
+                lu_has_width = 1;
+                break;
+            }
+            case 'I':
+            case 'l':
+            case 'h':
+            case 'w':
+            case 'z':
+            case 'j':
+            case 't':
+            case 'L':
+            {
+                const struct s_prefix_desc *lp_pfx = find_prefix(lp_iter);
+                if(lp_pfx)
+                {
+                    le_prefix = lp_pfx->me_type;
+                    if(1 < lp_pfx->mu_len)
+                    {
+                        lp_iter += (lp_pfx->mu_len - 1);
+                    }
+                }
+                break;
+            }
+            case 'd':
+            case 'i':
+            case 'o':
+            case 'u':
+            case 'x':
+            case 'X':
+            case 'b':
+            case 'B':
+            {
+                if(lz_count >= iz_args_max)
+                {
+                    return lz_count;
+                }
+
+                if(e_prefix_unknown == le_prefix)
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
+                }
+                else if(e_prefix_ll == le_prefix || e_prefix_i64 == le_prefix)
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT64;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint64_t);
+                }
+                else if(e_prefix_h == le_prefix)
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT16;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint16_t);
+                }
+                else if(e_prefix_hh == le_prefix)
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT8;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint8_t);
+                }
+                else if(e_prefix_l == le_prefix)
+                {
+#if defined(G_OS_WINDOWS)
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
+#elif defined(GTX64)
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT64;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint64_t);
+#else
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
+#endif
+                }
+                else if(e_prefix_i32 == le_prefix)
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
+                }
+                else if(e_prefix_i == le_prefix)
+                {
+#ifdef GTX64
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT64;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint64_t);
+#else
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
+#endif
+                }
+                else if(e_prefix_j == le_prefix)
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INTMAX;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uintmax_t);
+                }
+                else
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
+                }
+
+                lz_count++;
+                lb_percent = false;
+                break;
+            }
+            case 's':
+            case 'S':
+            {
+                if(lz_count >= iz_args_max)
+                {
+                    return lz_count;
+                }
+
+                if(e_prefix_h == le_prefix)
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_STRA;
+                    op_args[lz_count].mu_size = lu_has_width;
+                }
+                else if('S' == *lp_iter)
+                {
+#if defined(G_OS_WINDOWS)
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_STRA;
+#else
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_USTR32;
+#endif
+                    op_args[lz_count].mu_size = lu_has_width;
+                }
+                else if(e_prefix_l == le_prefix)
+                {
+#if defined(G_OS_WINDOWS)
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_USTR16;
+#else
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_USTR32;
+#endif
+                    op_args[lz_count].mu_size = lu_has_width;
+                }
+                else
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_USTR8;
+                    op_args[lz_count].mu_size = lu_has_width;
+                }
+
+                lz_count++;
+                lb_percent = false;
+                break;
+            }
+            case 'p':
+            {
+                if(lz_count >= iz_args_max)
+                {
+                    return lz_count;
+                }
+                op_args[lz_count].mu_type = P8_ARG_TYPE_PVOID;
+                op_args[lz_count].mu_size = P8_SIZE_OF_ARG(void *);
+                lz_count++;
+                lb_percent = false;
+                break;
+            }
+            case 'e':
+            case 'E':
+            case 'f':
+            case 'F':
+            case 'g':
+            case 'G':
+            case 'a':
+            case 'A':
+            {
+                if(lz_count >= iz_args_max)
+                {
+                    return lz_count;
+                }
+
+                if(e_prefix_upper_l == le_prefix)
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_LDOUBLE;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(long double);
+                }
+                else
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_DOUBLE;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(double);
+                }
+
+                lz_count++;
+                lb_percent = false;
+                break;
+            }
+            case 'c':
+            case 'C':
+            {
+                if(lz_count >= iz_args_max)
+                {
+                    return lz_count;
+                }
+
+                if(e_prefix_h == le_prefix)
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_CHAR;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(char);
+                }
+                else if(e_prefix_l == le_prefix)
+                {
+#if defined(G_OS_WINDOWS)
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_CHAR16;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(wchar_t);
+#else
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_CHAR32;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(wchar_t);
+#endif
+                }
+                else if('c' == *lp_iter)
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_CHAR;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(char);
+                }
+                else
+                {
+                    op_args[lz_count].mu_type = P8_ARG_TYPE_CHAR;
+                    op_args[lz_count].mu_size = P8_SIZE_OF_ARG(char);
+                }
+
+                lz_count++;
+                lb_percent = false;
+                break;
+            }
+            case '%':
+            {
+                lb_percent = false;
+                break;
+            }
+            } // switch
+
+            if(lb_percent && *lp_iter >= '0' && *lp_iter <= '9')
+            {
+                lu_has_width = 1;
+            }
+        }
+
+        lp_iter++;
+    }
+
+    return lz_count;
+}
 
 static thread_local cp8_log go_tls_log;
 

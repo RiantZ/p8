@@ -5,6 +5,24 @@
 class cp8_log
 {
 public:
+    // log item descriptor
+    //  format string
+    //  file path
+    //  file line
+    //  function
+    //  args list
+    //  id
+    //  module id
+    // log item:
+    //  id
+    //  time
+    //  serialized args
+    //  level
+    //  processor
+    //  thread
+    //  module id
+    //
+public:
     cp8_log();
 
     void            set_verbosity(p_p8_module ip_module, enum e_p8_level ie_verbosity);
