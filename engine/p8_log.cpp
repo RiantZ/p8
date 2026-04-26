@@ -351,6 +351,10 @@ cp8_log::cp8_log()
     : mp_core(cp8_core::get_global_core(P8_CORE_ACQUIRE_TIMEOUT_MS))
     , mu_thread_id(static_cast<uint32_t>(std::hash<std::thread::id> {}(std::this_thread::get_id())))
 {
+    if(mp_core)
+    {
+        mz_buf_sz = mp_core->get_buffer_size();
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -498,7 +502,6 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     struct s_p8_log_desc     *lp_desc    = nullptr;
     struct s_p8_log_item_hdr *lp_hdr     = nullptr;
     uint64_t                  lu_hash    = 0;
-    size_t                    lz_buf_sz  = 0;
     size_t                    lz_avail   = 0;
     uint8_t                  *lp_dst     = nullptr;
     uint8_t                  *lp_buf_end = nullptr;
@@ -513,13 +516,12 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         return false;
     }
 
-    lz_buf_sz = cp8_core::get_buffer_size();
-
     // buffer availability check
-    lz_avail  = mp_buffer ? (lz_buf_sz - mz_offset) : 0;
-    if(lz_avail < P8_LOG_MIN_BUFFER_SPACE)
+    if(mp_buffer)
     {
-        if(mp_buffer)
+        lz_avail = mz_buf_sz - mz_offset;
+
+        if(lz_avail < P8_LOG_MIN_BUFFER_SPACE)
         {
             mp_core->release_buffer(mp_buffer);
             mp_buffer = nullptr;
@@ -531,9 +533,18 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         {
             return false;
         }
-
         mz_offset = 0;
-        lz_avail  = lz_buf_sz;
+        lz_avail  = mz_buf_sz;
+    }
+    else
+    {
+        mp_buffer = mp_core->acquire_buffer();
+        if(!mp_buffer)
+        {
+            return false;
+        }
+        mz_offset = 0;
+        lz_avail  = mz_buf_sz;
     }
 
     // compute hash from file + line
@@ -558,7 +569,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     }
 
     // verify buffer space for header + fixed-size args at minimum
-    if(lz_avail < sizeof(struct s_p8_log_item_hdr) + lp_desc->mz_fixed_args_size)
+    if(lz_avail < sizeof(s_p8_log_item_hdr) + lp_desc->mz_fixed_args_size)
     {
         return false;
     }
@@ -566,6 +577,20 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     // write item header
     lp_hdr          = reinterpret_cast<struct s_p8_log_item_hdr *>(mp_buffer + mz_offset);
     lp_hdr->mu_hash = lu_hash;
+
+    // TODO: to measure!
+    //  #if defined(__linux__)
+    //      struct timespec ts;
+    //      clock_gettime(CLOCK_MONOTONIC, &ts);
+    //      lp_hdr->mu_timestamp_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+    //  #elif defined(__APPLE__)
+    //      lp_hdr->mu_timestamp_ns = mach_absolute_time(); // Apple Silicon: tики = наносекунды
+    //  #elif defined(_WIN32)
+    //      LARGE_INTEGER li;
+    //      QueryPerformanceCounter(&li);
+    //      lp_hdr->mu_timestamp_ns = /* ... нужна конвертация через QPC frequency */;
+    //  #endif
+
     lp_hdr->mu_timestamp_ns
         = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch() / std::chrono::nanoseconds(1));
     lp_hdr->mu_trace_id    = iu_trace_id;
@@ -573,14 +598,15 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     lp_hdr->mu_level       = static_cast<uint8_t>(ie_level);
     lp_hdr->mu_processor   = 0; // TODO: platform-specific CPU core ID
     lp_hdr->mu_attrs_count = static_cast<uint8_t>(iz_attrs > 255 ? 255 : iz_attrs);
-    memset(lp_hdr->mu_padding, 0, sizeof(lp_hdr->mu_padding));
+    // memset(lp_hdr->mu_padding, 0, sizeof(lp_hdr->mu_padding));
 
-    lp_dst     = mp_buffer + mz_offset + sizeof(struct s_p8_log_item_hdr);
-    lp_buf_end = mp_buffer + lz_buf_sz;
+    lp_dst                 = mp_buffer + mz_offset + sizeof(struct s_p8_log_item_hdr);
+    lp_buf_end             = mp_buffer + mz_buf_sz;
 
     // serialize variable arguments guided by the descriptor
     for(size_t lz_i = 0; lz_i < lp_desc->mz_args_count; lz_i++)
     {
+        // TODO: iteration over pointer ariphmetics
         const struct s_p8_trace_arg *lp_arg = &lp_desc->ma_args[lz_i];
 
         if(is_string_arg(lp_arg->mu_type))
@@ -613,6 +639,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
                 break;
             }
 
+            // TODO: this is not enough, not all data might be written in prev cycle
             if(0 == lz_written)
             {
                 goto lbl_finalize;
@@ -699,7 +726,7 @@ lbl_finalize:
     lb_result       = true;
 
     // post-check: if remaining buffer < P8_LOG_MIN_BUFFER_SPACE, return it to pool
-    if(lz_buf_sz - mz_offset < P8_LOG_MIN_BUFFER_SPACE)
+    if(mz_buf_sz - mz_offset < P8_LOG_MIN_BUFFER_SPACE)
     {
         mp_core->release_buffer(mp_buffer);
         mp_buffer = nullptr;
