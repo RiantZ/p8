@@ -512,10 +512,8 @@ void p8_test_reset()
         c_shared::close(gp_shm_handle);
         gp_shm_handle = nullptr;
     }
-    else
-    {
-        c_shared::unlink(gp_shm_name);
-    }
+
+    c_shared::unlink(gp_shm_name);
 
     gu_instance_count.store(0);
 }
