@@ -34,6 +34,16 @@ Build output is placed in a platform-specific directory at the project root:
 
 You can also invoke CMake directly with a preset: `cmake --preset macos`.
 
+### Testing
+
+```bash
+# Run regression tests (macOS example; substitute _Build_wnd or _Build_lnx on other platforms)
+cd _Build_mac && ctest
+
+# Run performance tests (disabled by default, must be requested explicitly)
+cd _Build_mac && ./tests/regression/P8_RegressionTests --gtest_filter="c_log_perf_test.*" --gtest_also_run_disabled_tests
+```
+
 ### Custom presets
 
 To override settings without changing tracked files, create `CMakeUserPresets.json` (git-ignored) in the project root. A preset defined there can inherit from any base preset in `CMakePresets.json`.
