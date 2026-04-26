@@ -126,20 +126,21 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
         // TODO: configure destination path or network endpoint
     }
 
-    const char *lp_max_mem  = nullptr;
-    const char *lp_init_mem = nullptr;
+    std::string ls_max_mem;
+    std::string ls_init_mem;
 
     if(lo_json.contains(P8_CFG_KEY_MAX_MEMORY_SIZE))
     {
-        lp_max_mem = lo_json[P8_CFG_KEY_MAX_MEMORY_SIZE].get<std::string>().c_str();
+        ls_max_mem = lo_json[P8_CFG_KEY_MAX_MEMORY_SIZE].get<std::string>();
     }
 
     if(lo_json.contains(P8_CFG_KEY_INITIAL_MEMORY_SIZE))
     {
-        lp_init_mem = lo_json[P8_CFG_KEY_INITIAL_MEMORY_SIZE].get<std::string>().c_str();
+        ls_init_mem = lo_json[P8_CFG_KEY_INITIAL_MEMORY_SIZE].get<std::string>();
     }
 
-    if(!init_buffer_pool(lp_max_mem, lp_init_mem))
+    if(!init_buffer_pool(ls_max_mem.empty() ? nullptr : ls_max_mem.c_str(),
+                         ls_init_mem.empty() ? nullptr : ls_init_mem.c_str()))
     {
         return;
     }
