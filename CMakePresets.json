@@ -14,13 +14,19 @@
       "binaryDir": "${sourceDir}/_Build_mac",
       "cacheVariables": {
         "P8_BUILD_SCRIPT": "ON",
-        "CMAKE_OSX_SYSROOT": "macosx"
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_OSX_SYSROOT": "macosx",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     },
     {
       "name": "linux",
       "binaryDir": "${sourceDir}/_Build_lnx",
-      "cacheVariables": { "P8_BUILD_SCRIPT": "ON" }
+      "cacheVariables": {
+        "P8_BUILD_SCRIPT": "ON",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
     }
   ]
 }
