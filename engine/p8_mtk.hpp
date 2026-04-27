@@ -6,6 +6,7 @@ class cp8_mtk
 {
 public:
     cp8_mtk();
+    ~cp8_mtk();
 
     h_p8_mtk_id       create(const struct s_p8_mtk_base *ip_base);
     bool              emit(h_p8_mtk_id ih_id, double id_value);

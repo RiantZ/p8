@@ -354,6 +354,7 @@ cp8_log::cp8_log()
 {
     if(mp_core)
     {
+        mp_core->addref();
         mz_buf_sz = mp_core->get_buffer_size();
     }
 }
@@ -361,10 +362,15 @@ cp8_log::cp8_log()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 cp8_log::~cp8_log()
 {
-    if(mp_buffer && mp_core)
+    if(mp_core)
     {
-        mp_core->release_buffer(mp_buffer);
-        mp_buffer = nullptr;
+        if(mp_buffer)
+        {
+            mp_core->release_buffer(mp_buffer);
+            mp_buffer = nullptr;
+        }
+        mp_core->release();
+        mp_core = nullptr;
     }
 }
 

@@ -6,6 +6,7 @@ class cp8_trc
 {
 public:
     cp8_trc();
+    ~cp8_trc();
 
     uint64_t begin(uint64_t                    iu_parent_trace_id,
                    uint32_t                    iu_line,

@@ -4,6 +4,7 @@
 
 #include "kit/list.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <mutex>
@@ -18,6 +19,10 @@ class cp8_core
 public:
     explicit cp8_core(const struct s_p8_config *ip_config);
     ~cp8_core();
+
+    // lifetime
+    void addref();
+    void release();
 
     // core
     static cp8_core *get_global_core(uint32_t iu_timeoutms);
@@ -53,7 +58,8 @@ public:
 private:
     bool init_buffer_pool(const char *ip_max_memory_size, const char *ip_initial_memory_size);
 
-    bool mb_initialized                        = false;
+    bool                  mb_initialized = false;
+    std::atomic<uint32_t> mu_ref_count { 1 };
 
     // config — buffer pool
     const static size_t mz_buffer_size         = 8192;
