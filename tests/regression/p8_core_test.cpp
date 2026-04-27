@@ -14,7 +14,7 @@ class c_p8_core_test : public ::testing::Test
 protected:
     void TearDown() override
     {
-        p8_test_reset();
+        p8_release();
     }
 };
 

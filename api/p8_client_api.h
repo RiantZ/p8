@@ -46,6 +46,19 @@ extern "C"
     /// @return true - P8 is initialized, false - not initialized
     bool p8_get_initialized();
 
+    /// @brief Release the global P8 core instance.
+    ///
+    /// Decrements the internal reference count on the core. The core is not
+    /// destroyed immediately if per-thread objects (log, trace, metrics) still
+    /// hold references — it stays alive until the last thread-local destructor
+    /// releases its reference, at which point the core is deleted
+    /// automatically. Shared memory is cleaned up here so a subsequent
+    /// p8_initialize() can start fresh.
+    ///
+    /// Safe to call when P8 is not initialized (no-op).
+    /// After this call p8_get_initialized() returns false.
+    void p8_release();
+
     /// @brief Function allows to flush (deliver) not  delivered/saved  P8  buffers  for  all opened clients and
     /// related channels owned by process in CASE OF your app/proc. crash. This function do not call system  memory
     /// allocation functions  only  writes to file/socket. Classical scenario: your application has been crushed, you

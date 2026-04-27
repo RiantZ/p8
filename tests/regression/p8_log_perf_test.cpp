@@ -23,7 +23,7 @@ protected:
 
     void TearDown() override
     {
-        p8_test_reset();
+        p8_release();
     }
 };
 
