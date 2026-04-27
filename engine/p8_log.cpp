@@ -408,7 +408,7 @@ static size_t serialize_utf8_string(uint8_t *op_dst, size_t iz_avail, const char
 
     if(ip_str)
     {
-        size_t lz_slen = strlen(ip_str) + 1;
+        size_t lz_slen = strlen(ip_str);
         lu_len         = (lz_slen > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_slen);
     }
 
@@ -433,7 +433,7 @@ static size_t serialize_wide_string(uint8_t *op_dst, size_t iz_avail, const wcha
 
     if(ip_str)
     {
-        size_t lz_bytes = (wcslen(ip_str) + 1) * sizeof(wchar_t);
+        size_t lz_bytes = wcslen(ip_str) * sizeof(wchar_t);
         lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
     }
 
@@ -463,7 +463,7 @@ static size_t serialize_u16_string(uint8_t *op_dst, size_t iz_avail, const uint1
         {
             lz_chars++;
         }
-        size_t lz_bytes = (lz_chars + 1) * sizeof(uint16_t);
+        size_t lz_bytes = lz_chars * sizeof(uint16_t);
         lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
     }
 
