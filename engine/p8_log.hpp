@@ -5,7 +5,7 @@
 
 #include "kit/spin_lock.hpp"
 
-#include <map>
+#include <unordered_map>
 
 struct s_p8_log_desc
 {
