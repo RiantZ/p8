@@ -1,8 +1,12 @@
 #include "p8_core.hpp"
 #include "p8_config_keys.hpp"
+#include "p8_hash.hpp"
 #include "p8_log.hpp"
 
+#include "kit/endian.hpp"
 #include "kit/shared_mem.hpp"
+#include "kit/system.hpp"
+#include "kit/time.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -145,6 +149,8 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
         return;
     }
 
+    init_header(ip_config);
+
     mb_initialized = true;
 }
 
@@ -219,6 +225,60 @@ bool cp8_core::init_buffer_pool(const char *ip_max_memory_size, const char *ip_i
         mo_free_buffers.push_last(lp_buf);
         mo_all_buffers.push_last(lp_buf);
         mz_total_allocated += mz_buffer_size;
+    }
+
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool cp8_core::init_header(const struct s_p8_config *ip_config)
+{
+    std::memset(&mo_hdr, 0, sizeof(mo_hdr));
+
+    mo_hdr.mu_packet_type      = P8_PACKET_MAIN;
+    mo_hdr.mu_protocol_version = P8_PROTOCOL_VERSION;
+
+    uint32_t lu_endian         = 0x1;
+    mo_hdr.mu_is_big_endian    = (*reinterpret_cast<uint8_t *>(&lu_endian) == 0) ? 1 : 0;
+
+    mo_hdr.mi_utc_sec_offset   = static_cast<int8_t>(kit::get_utc_offset_seconds() / 3600);
+    mo_hdr.mu_size             = static_cast<uint32_t>(sizeof(struct s_p8_hdr));
+    mo_hdr.mu_process_id       = kit::get_process_id();
+    mo_hdr.mu_system_time      = kit::get_system_time();
+
+    // TODO: use this callbacks by logs, traces, metrics
+    if(ip_config->ml_timer_value && ip_config->ml_timer_frequency)
+    {
+        mo_hdr.mu_hires_tick       = ip_config->ml_timer_value(ip_config->mp_ctx_timer);
+        uint64_t lu_freq           = ip_config->ml_timer_frequency(ip_config->mp_ctx_timer);
+        mo_hdr.mu_hires_freq_numer = 1000000000ULL;
+        mo_hdr.mu_hires_freq_denom = lu_freq;
+    }
+    else
+    {
+        mo_hdr.mu_hires_tick = kit::get_hires_ticks();
+        kit::get_hires_ticks_freq(mo_hdr.mu_hires_freq_numer, mo_hdr.mu_hires_freq_denom);
+    }
+
+    kit::get_process_name(mo_hdr.mp_process_name, sizeof(mo_hdr.mp_process_name));
+    kit::get_host_name(mo_hdr.mp_host_name, sizeof(mo_hdr.mp_host_name));
+
+    if(mo_hdr.mu_is_big_endian)
+    {
+        mo_hdr.mu_size             = kit::bswap32(mo_hdr.mu_size);
+        mo_hdr.mi_utc_sec_offset   = kit::bswap32(mo_hdr.mi_utc_sec_offset);
+        mo_hdr.mu_process_id       = kit::bswap32(mo_hdr.mu_process_id);
+        mo_hdr.mu_system_time      = kit::bswap64(mo_hdr.mu_system_time);
+        mo_hdr.mu_hires_tick       = kit::bswap64(mo_hdr.mu_hires_tick);
+        mo_hdr.mu_hires_freq_numer = kit::bswap64(mo_hdr.mu_hires_freq_numer);
+        mo_hdr.mu_hires_freq_denom = kit::bswap64(mo_hdr.mu_hires_freq_denom);
+    }
+
+    mo_hdr.mu_hash = XXH3_64bits(&mo_hdr, offsetof(struct s_p8_hdr, mu_hash));
+
+    if(mo_hdr.mu_is_big_endian)
+    {
+        mo_hdr.mu_hash = kit::bswap64(mo_hdr.mu_hash);
     }
 
     return true;

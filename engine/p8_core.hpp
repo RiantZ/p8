@@ -1,6 +1,7 @@
 #pragma once
 
 #include "p8_client_api.h"
+#include "p8_protocol.h"
 
 #include "kit/list.hpp"
 
@@ -57,9 +58,12 @@ public:
 
 private:
     bool init_buffer_pool(const char *ip_max_memory_size, const char *ip_initial_memory_size);
+    bool init_header(const struct s_p8_config *ip_config);
 
     bool                  mb_initialized = false;
     std::atomic<uint32_t> mu_ref_count { 1 };
+
+    struct s_p8_hdr mo_hdr                     = {};
 
     // config — buffer pool
     const static size_t mz_buffer_size         = 8192;
