@@ -25,6 +25,8 @@ cd _Build_mac && ./tests/regression/P8_RegressionTests --gtest_filter="c_log_per
 | macOS    | `_Build_mac/`   | `macos`   |
 | Linux    | `_Build_lnx/`   | `linux`   |
 
+**Always check `CMakeUserPresets.json` first.** If it exists, use its preset via `--preset` (e.g. `python scripts/cmake_build.py --preset macos-local-kit --build`). It is git-ignored and may point kit to a local checkout via `FETCHCONTENT_SOURCE_DIR_KIT`, which is required when the local kit has unpushed changes.
+
 Custom presets: create `CMakeUserPresets.json` (git-ignored) inheriting from a base preset.
 
 ## Code Formatting
