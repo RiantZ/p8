@@ -580,132 +580,96 @@ bool cp8_log::send(enum e_p8_level             ie_level,
 
     // serialize variable arguments via pointer iteration
     {
-        const struct s_p8_trace_arg *lp_arg     = lp_desc->ma_args;
-        const struct s_p8_trace_arg *lp_arg_end = lp_arg + lp_desc->mz_args_count;
+        const s_p8_trace_arg *lp_arg     = lp_desc->ma_args;
+        const s_p8_trace_arg *lp_arg_end = lp_arg + lp_desc->mz_args_count;
 
         for(; lp_arg < lp_arg_end; ++lp_arg)
         {
-            switch(lp_arg->mu_type)
+            if(lp_dst + lp_arg->mu_size > lp_buf_end) [[unlikely]]
             {
-                // TODO: make tests with non UB logic for performance
-            case P8_ARG_TYPE_INT32:
-            case P8_ARG_TYPE_INT8:
-            case P8_ARG_TYPE_CHAR16:
-            case P8_ARG_TYPE_CHAR32:
-            case P8_ARG_TYPE_INT16:
+                lb_ret = false;
+                goto lbl_finalize;
+            }
+#if defined(GTX32)
+            if(4 == lp_arg->mu_size)
             {
-                if(lp_dst + lp_arg->mu_size > lp_buf_end)
-                {
-                    lb_ret = false;
-                    goto lbl_finalize;
-                }
-                uint32_t lu_val = va_arg(io_args, uint32_t);
+                unsigned int lu_val = va_arg(io_args, unsigned int);
                 memcpy(lp_dst, &lu_val, sizeof(lu_val));
                 lp_dst += lp_arg->mu_size;
-                break;
             }
-            case P8_ARG_TYPE_INT64:
+            else
+#endif
+                if(sizeof(uint64_t) == lp_arg->mu_size)
             {
-                if(lp_dst + lp_arg->mu_size > lp_buf_end)
+                if(P8_ARG_TYPE_DOUBLE != lp_arg->mu_type) [[likely]]
                 {
-                    lb_ret = false;
-                    goto lbl_finalize;
+                    uint64_t lu_val = va_arg(io_args, uint64_t);
+                    memcpy(lp_dst, &lu_val, sizeof(lu_val));
+                    lp_dst += lp_arg->mu_size;
                 }
-                uint64_t lu_val = va_arg(io_args, uint64_t);
-                memcpy(lp_dst, &lu_val, sizeof(lu_val));
-                lp_dst += lp_arg->mu_size;
-                break;
+                else
+                {
+                    double ld_val = va_arg(io_args, double);
+                    memcpy(lp_dst, &ld_val, sizeof(ld_val));
+                    lp_dst += lp_arg->mu_size;
+                }
             }
-            case P8_ARG_TYPE_DOUBLE:
+            else if(P8_ARG_TYPE_LDOUBLE == lp_arg->mu_type)
             {
-                if(lp_dst + lp_arg->mu_size > lp_buf_end)
-                {
-                    lb_ret = false;
-                    goto lbl_finalize;
-                }
-                double ld_val = va_arg(io_args, double);
-                memcpy(lp_dst, &ld_val, sizeof(ld_val));
-                lp_dst += lp_arg->mu_size;
-                break;
-            }
-            case P8_ARG_TYPE_LDOUBLE:
-            {
-                if(lp_dst + lp_arg->mu_size > lp_buf_end)
-                {
-                    lb_ret = false;
-                    goto lbl_finalize;
-                }
                 long double ld_val = va_arg(io_args, long double);
                 memcpy(lp_dst, &ld_val, sizeof(ld_val));
                 lp_dst += lp_arg->mu_size;
-                break;
             }
-            case P8_ARG_TYPE_PVOID:
+            else
             {
-                if(lp_dst + lp_arg->mu_size > lp_buf_end)
+                switch(lp_arg->mu_type)
                 {
-                    lb_ret = false;
-                    goto lbl_finalize;
-                }
-                void *lp_val = va_arg(io_args, void *);
-                memcpy(lp_dst, &lp_val, sizeof(lp_val));
-                lp_dst += lp_arg->mu_size;
-                break;
-            }
-            case P8_ARG_TYPE_INTMAX:
-            {
-                if(lp_dst + lp_arg->mu_size > lp_buf_end)
+                case P8_ARG_TYPE_USTR8:
+                case P8_ARG_TYPE_STRA:
                 {
-                    lb_ret = false;
-                    goto lbl_finalize;
+                    size_t      lz_remain  = static_cast<size_t>(lp_buf_end - lp_dst);
+                    const char *lp_str     = va_arg(io_args, const char *);
+                    size_t      lz_written = serialize_utf8_string(lp_dst, lz_remain, lp_str);
+                    if(0 == lz_written)
+                    {
+                        lb_ret = false;
+                        goto lbl_finalize;
+                    }
+                    lp_dst += lz_written;
+                    break;
                 }
-                uintmax_t lu_val = va_arg(io_args, uintmax_t);
-                memcpy(lp_dst, &lu_val, sizeof(lu_val));
-                lp_dst += lp_arg->mu_size;
-                break;
-            }
-            case P8_ARG_TYPE_USTR8:
-            case P8_ARG_TYPE_STRA:
-            {
-                size_t      lz_remain  = static_cast<size_t>(lp_buf_end - lp_dst);
-                const char *lp_str     = va_arg(io_args, const char *);
-                size_t      lz_written = serialize_utf8_string(lp_dst, lz_remain, lp_str);
-                if(0 == lz_written)
+                case P8_ARG_TYPE_USTR16:
                 {
-                    lb_ret = false;
-                    goto lbl_finalize;
+                    size_t          lz_remain  = static_cast<size_t>(lp_buf_end - lp_dst);
+                    const uint16_t *lp_str     = va_arg(io_args, const uint16_t *);
+                    size_t          lz_written = serialize_u16_string(lp_dst, lz_remain, lp_str);
+                    if(0 == lz_written)
+                    {
+                        lb_ret = false;
+                        goto lbl_finalize;
+                    }
+                    lp_dst += lz_written;
+                    break;
                 }
-                lp_dst += lz_written;
-                break;
-            }
-            case P8_ARG_TYPE_USTR16:
-            {
-                size_t          lz_remain  = static_cast<size_t>(lp_buf_end - lp_dst);
-                const uint16_t *lp_str     = va_arg(io_args, const uint16_t *);
-                size_t          lz_written = serialize_u16_string(lp_dst, lz_remain, lp_str);
-                if(0 == lz_written)
+                case P8_ARG_TYPE_USTR32:
                 {
-                    lb_ret = false;
-                    goto lbl_finalize;
+                    size_t         lz_remain  = static_cast<size_t>(lp_buf_end - lp_dst);
+                    const wchar_t *lp_str     = va_arg(io_args, const wchar_t *);
+                    size_t         lz_written = serialize_wide_string(lp_dst, lz_remain, lp_str);
+                    if(0 == lz_written)
+                    {
+                        lb_ret = false;
+                        goto lbl_finalize;
+                    }
+                    lp_dst += lz_written;
+                    break;
                 }
-                lp_dst += lz_written;
-                break;
-            }
-            case P8_ARG_TYPE_USTR32:
-            {
-                size_t         lz_remain  = static_cast<size_t>(lp_buf_end - lp_dst);
-                const wchar_t *lp_str     = va_arg(io_args, const wchar_t *);
-                size_t         lz_written = serialize_wide_string(lp_dst, lz_remain, lp_str);
-                if(0 == lz_written)
+                default:
                 {
-                    lb_ret = false;
-                    goto lbl_finalize;
+                    std::fprintf(stderr, "p8_log: unknown argument %d\n", lp_arg->mu_type);
+                    break;
                 }
-                lp_dst += lz_written;
-                break;
-            }
-            default:
-                break;
+                }
             }
         }
     }
