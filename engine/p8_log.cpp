@@ -689,8 +689,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         for(size_t lz_i = 0; !lb_need_sync && ip_attrs && lz_i < iz_attrs; ++lz_i)
         {
             p8_attr_id li_id = ip_attrs[lz_i].m_id;
-            if(li_id < 0
-               || static_cast<size_t>(li_id) >= mo_attr_cache.size()
+            if(li_id < 0 || static_cast<size_t>(li_id) >= mo_attr_cache.size()
                || !mo_attr_cache[static_cast<size_t>(li_id)])
             {
                 lb_need_sync = true;
@@ -720,8 +719,8 @@ bool cp8_log::send(enum e_p8_level             ie_level,
 
             if(lp_attr_desc->me_type == e_p8_attr_str)
             {
-                size_t lz_remain  = static_cast<size_t>(lp_buf_end - lp_dst);
-                size_t lz_hdr_sz  = sizeof(p8_attr_id) + sizeof(uint8_t);
+                size_t lz_remain = static_cast<size_t>(lp_buf_end - lp_dst);
+                size_t lz_hdr_sz = sizeof(p8_attr_id) + sizeof(uint8_t);
                 if(lz_remain < lz_hdr_sz)
                 {
                     break;
@@ -732,9 +731,8 @@ bool cp8_log::send(enum e_p8_level             ie_level,
                 memcpy(lp_dst, &lu_type_tag, sizeof(uint8_t));
                 lp_dst += sizeof(uint8_t);
 
-                size_t lz_written = serialize_utf8_string(lp_dst,
-                                                          static_cast<size_t>(lp_buf_end - lp_dst),
-                                                          ip_attrs[lz_i].mp_str);
+                size_t lz_written
+                    = serialize_utf8_string(lp_dst, static_cast<size_t>(lp_buf_end - lp_dst), ip_attrs[lz_i].mp_str);
                 if(lz_written == 0)
                 {
                     lp_dst -= lz_hdr_sz;

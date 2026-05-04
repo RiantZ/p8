@@ -19,9 +19,9 @@ struct s_p8_log_desc;
 
 struct s_p8_attr_desc
 {
-    p8_attr_id             mi_id;
-    enum e_p8_attr_type    me_type;
-    char                  *mp_name;
+    p8_attr_id          mi_id;
+    enum e_p8_attr_type me_type;
+    char               *mp_name;
 };
 
 class cp8_core
