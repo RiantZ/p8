@@ -120,16 +120,18 @@ extern "C"
 
     /// @brief Attribute ID returned by p8_attr_register.
     ///
-    /// Positive values (> 0) are valid attribute handles.
-    /// Negative values indicate a registration error.
-    /// Zero is reserved and never returned as a valid ID.
+    /// Non-negative values (>= 0) are valid attribute handles.
+    /// Negative values indicate an error (registration failure or not found).
     typedef int32_t p8_attr_id;
 
 /// @brief Sentinel value for an invalid / unregistered attribute.
-// TODO: add error codes
-#define P8_IS_ATTR_VALID(x)           (((p8_attr_id)(x)) > 0)
+#define P8_IS_ATTR_VALID(x)           (((p8_attr_id)(x)) >= 0)
 
-#define P8_ATTR_ERROR_NOT_IMPLEMENTED -1
+#define P8_ATTR_ERROR_NOT_INITIALIZED -1
+#define P8_ATTR_ERROR_INVALID_NAME    -2
+#define P8_ATTR_ERROR_TYPE_MISMATCH   -3
+#define P8_ATTR_ERROR_ALLOC_FAILED    -4
+#define P8_ATTR_ERROR_NOT_FOUND       -5
 
     /// @brief Register a named attribute with a fixed value type.
     ///
@@ -140,13 +142,13 @@ extern "C"
     ///
     /// @param ip_name [in] attribute name, e.g. "user_id". Must not be nullptr.
     /// @param ie_type [in] value type that will accompany every record
-    /// @return positive ID on success, negative error code on failure
+    /// @return non-negative ID on success, negative error code on failure
     p8_attr_id p8_attr_register(const char *ip_name, enum e_p8_attr_type ie_type);
 
     /// @brief Look up a previously registered attribute by name.
     ///
     /// @param ip_name [in] attribute name, e.g. "user_id". Must not be nullptr.
-    /// @return positive attribute ID if found, P8_ATTR_INVALID (0) if not registered
+    /// @return non-negative attribute ID if found, P8_ATTR_ERROR_NOT_FOUND if not registered
     p8_attr_id p8_attr_get(const char *ip_name);
 
     /// @brief A single attribute value bound to a registered attribute ID.
@@ -424,7 +426,7 @@ extern "C"
     typedef int16_t h_p8_mtk_group_id;
 
 /// @brief Check for metric ID validity
-#define P8_IS_METRIC_VALID (id)((id) > 0)
+#define P8_IS_METRIC_VALID (id)((id) >= 0)
 
     /// @brief Callback type for query-based metric: P8 invokes this periodically to obtain the current metric value
     /// @param ip_user_context [in] opaque user-defined context passed during metric creation

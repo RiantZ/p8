@@ -17,6 +17,7 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(${PROJECT_NAME}
     main.cpp
+    p8_attr_test.cpp
     p8_config_test.cpp
     p8_core_test.cpp
     p8_xxh_test.cpp

@@ -163,6 +163,14 @@ cp8_core::~cp8_core()
     }
     mo_log_descs.clear();
 
+    for(s_p8_attr_desc *lp_desc : mo_attr_descs)
+    {
+        std::free(lp_desc->mp_name);
+        delete lp_desc;
+    }
+    mo_attr_descs.clear();
+    mo_attr_name_map.clear();
+
     for(uint8_t *lp_buf : mo_all_buffers)
     {
         delete[] lp_buf;
@@ -307,15 +315,85 @@ void cp8_core::unregister_current_thread()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-p8_attr_id cp8_core::attr_register(const char *, enum e_p8_attr_type)
+p8_attr_id cp8_core::attr_register(const char *ip_name, enum e_p8_attr_type ie_type)
 {
-    return P8_ATTR_ERROR_NOT_IMPLEMENTED;
+    if(!ip_name || ip_name[0] == '\0')
+    {
+        return P8_ATTR_ERROR_INVALID_NAME;
+    }
+
+    std::lock_guard<std::mutex> lo_lock(mo_attr_mutex);
+
+    auto lo_it = mo_attr_name_map.find(ip_name);
+    if(lo_it != mo_attr_name_map.end())
+    {
+        p8_attr_id li_existing = lo_it->second;
+        if(mo_attr_descs[static_cast<size_t>(li_existing)]->me_type != ie_type)
+        {
+            return P8_ATTR_ERROR_TYPE_MISMATCH;
+        }
+        return li_existing;
+    }
+
+    s_p8_attr_desc *lp_desc = new(std::nothrow) s_p8_attr_desc;
+    if(!lp_desc)
+    {
+        return P8_ATTR_ERROR_ALLOC_FAILED;
+    }
+
+    lp_desc->mp_name = strdup(ip_name);
+    if(!lp_desc->mp_name)
+    {
+        delete lp_desc;
+        return P8_ATTR_ERROR_ALLOC_FAILED;
+    }
+
+    lp_desc->mi_id   = static_cast<p8_attr_id>(mo_attr_descs.size());
+    lp_desc->me_type = ie_type;
+
+    mo_attr_descs.push_back(lp_desc);
+    mo_attr_name_map[ip_name] = lp_desc->mi_id;
+
+    return lp_desc->mi_id;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-p8_attr_id cp8_core::attr_get(const char *) const
+p8_attr_id cp8_core::attr_get(const char *ip_name) const
 {
-    return P8_ATTR_ERROR_NOT_IMPLEMENTED;
+    if(!ip_name || ip_name[0] == '\0')
+    {
+        return P8_ATTR_ERROR_NOT_FOUND;
+    }
+
+    std::lock_guard<std::mutex> lo_lock(mo_attr_mutex);
+
+    auto lo_it = mo_attr_name_map.find(ip_name);
+    if(lo_it != mo_attr_name_map.end())
+    {
+        return lo_it->second;
+    }
+
+    return P8_ATTR_ERROR_NOT_FOUND;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::sync_attr_cache(std::vector<const s_p8_attr_desc *> &io_cache)
+{
+    std::lock_guard<std::mutex> lo_lock(mo_attr_mutex);
+
+    size_t lz_old = io_cache.size();
+    size_t lz_new = mo_attr_descs.size();
+
+    if(lz_old >= lz_new)
+    {
+        return;
+    }
+
+    io_cache.resize(lz_new);
+    for(size_t lz_i = lz_old; lz_i < lz_new; ++lz_i)
+    {
+        io_cache[lz_i] = mo_attr_descs[lz_i];
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -554,15 +632,23 @@ lbl_exit:
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    p8_attr_id p8_attr_register(const char *, enum e_p8_attr_type)
+    p8_attr_id p8_attr_register(const char *ip_name, enum e_p8_attr_type ie_type)
     {
-        return P8_ATTR_ERROR_NOT_IMPLEMENTED;
+        if(!gp_instance)
+        {
+            return P8_ATTR_ERROR_NOT_INITIALIZED;
+        }
+        return gp_instance->attr_register(ip_name, ie_type);
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    p8_attr_id p8_attr_get(const char *)
+    p8_attr_id p8_attr_get(const char *ip_name)
     {
-        return P8_ATTR_ERROR_NOT_IMPLEMENTED;
+        if(!gp_instance)
+        {
+            return P8_ATTR_ERROR_NOT_FOUND;
+        }
+        return gp_instance->attr_get(ip_name);
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

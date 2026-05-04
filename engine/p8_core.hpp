@@ -9,11 +9,20 @@
 #include <cstdint>
 #include <map>
 #include <mutex>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #define P8_CORE_ACQUIRE_TIMEOUT_MS 100
 
 struct s_p8_log_desc;
+
+struct s_p8_attr_desc
+{
+    p8_attr_id             mi_id;
+    enum e_p8_attr_type    me_type;
+    char                  *mp_name;
+};
 
 class cp8_core
 {
@@ -37,6 +46,7 @@ public:
     // attributes
     p8_attr_id attr_register(const char *ip_name, enum e_p8_attr_type ie_type);
     p8_attr_id attr_get(const char *ip_name) const;
+    void       sync_attr_cache(std::vector<const s_p8_attr_desc *> &io_cache);
 
     // buffer pool
     static size_t get_buffer_size();
@@ -79,6 +89,11 @@ private:
     // log descriptor registry (global, shared across all TLS cp8_log instances)
     std::map<uint64_t, struct s_p8_log_desc *> mo_log_descs;
     std::mutex                                 mo_log_desc_mutex;
+
+    // attribute registry (global, TLS consumers sync via sync_attr_cache)
+    std::vector<s_p8_attr_desc *>               mo_attr_descs;
+    std::unordered_map<std::string, p8_attr_id> mo_attr_name_map;
+    mutable std::mutex                          mo_attr_mutex;
 
 #ifdef P8_TESTING
     friend size_t p8_test_get_buffer_size();
