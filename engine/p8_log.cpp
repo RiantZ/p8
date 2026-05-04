@@ -683,25 +683,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     lp_hdr->mu_args_size
         = static_cast<uint16_t>(lp_dst - reinterpret_cast<uint8_t *>(lp_hdr) - sizeof(struct s_p8_log_item_hdr));
 
-    // sync attribute cache if any attr_id is unknown to this TLS instance
-    {
-        bool lb_need_sync = false;
-        for(size_t lz_i = 0; !lb_need_sync && ip_attrs && lz_i < iz_attrs; ++lz_i)
-        {
-            p8_attr_id li_id = ip_attrs[lz_i].m_id;
-            if(li_id < 0 || static_cast<size_t>(li_id) >= mo_attr_cache.size()
-               || !mo_attr_cache[static_cast<size_t>(li_id)])
-            {
-                lb_need_sync = true;
-            }
-        }
-        if(lb_need_sync)
-        {
-            mp_core->sync_attr_cache(mo_attr_cache);
-        }
-    }
-
-    // serialize attributes: type-aware encoding
+    // serialize attributes: sync cache on demand, then encode
     {
         uint8_t lu_attrs_written = 0;
         for(size_t lz_i = 0; ip_attrs && lz_i < iz_attrs; ++lz_i)
@@ -709,18 +691,30 @@ bool cp8_log::send(enum e_p8_level             ie_level,
             p8_attr_id li_id  = ip_attrs[lz_i].m_id;
             size_t     lz_idx = static_cast<size_t>(li_id);
 
-            if(li_id < 0 || lz_idx >= mo_attr_cache.size() || !mo_attr_cache[lz_idx])
+            if(li_id < 0)
             {
+                // TODO: print error that attr is skipped
                 continue;
             }
 
-            const s_p8_attr_desc *lp_attr_desc = mo_attr_cache[lz_idx];
-            uint8_t               lu_type_tag  = static_cast<uint8_t>(lp_attr_desc->me_type);
+            if(lz_idx >= mo_attr_cache.size() || !mo_attr_cache[lz_idx])
+            {
+                mp_core->sync_attr_cache(mo_attr_cache);
 
+                if(lz_idx >= mo_attr_cache.size() || !mo_attr_cache[lz_idx])
+                {
+                    // TODO: print error that attr is skipped
+                    continue;
+                }
+            }
+
+            const s_p8_attr_desc *lp_attr_desc = mo_attr_cache[lz_idx];
+
+            // We are not serialyzing type here - we going to send it from the core.
             if(lp_attr_desc->me_type == e_p8_attr_str)
             {
                 size_t lz_remain = static_cast<size_t>(lp_buf_end - lp_dst);
-                size_t lz_hdr_sz = sizeof(p8_attr_id) + sizeof(uint8_t);
+                size_t lz_hdr_sz = sizeof(p8_attr_id);
                 if(lz_remain < lz_hdr_sz)
                 {
                     break;
@@ -728,8 +722,6 @@ bool cp8_log::send(enum e_p8_level             ie_level,
 
                 memcpy(lp_dst, &li_id, sizeof(p8_attr_id));
                 lp_dst += sizeof(p8_attr_id);
-                memcpy(lp_dst, &lu_type_tag, sizeof(uint8_t));
-                lp_dst += sizeof(uint8_t);
 
                 size_t lz_written
                     = serialize_utf8_string(lp_dst, static_cast<size_t>(lp_buf_end - lp_dst), ip_attrs[lz_i].mp_str);
@@ -742,7 +734,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
             }
             else
             {
-                size_t lz_needed = sizeof(p8_attr_id) + sizeof(uint8_t) + sizeof(uint64_t);
+                size_t lz_needed = sizeof(p8_attr_id) + sizeof(uint64_t);
                 if(lp_dst + lz_needed > lp_buf_end)
                 {
                     break;
@@ -750,8 +742,6 @@ bool cp8_log::send(enum e_p8_level             ie_level,
 
                 memcpy(lp_dst, &li_id, sizeof(p8_attr_id));
                 lp_dst += sizeof(p8_attr_id);
-                memcpy(lp_dst, &lu_type_tag, sizeof(uint8_t));
-                lp_dst += sizeof(uint8_t);
                 memcpy(lp_dst, &ip_attrs[lz_i].mu_u64, sizeof(uint64_t));
                 lp_dst += sizeof(uint64_t);
             }
