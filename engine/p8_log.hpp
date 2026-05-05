@@ -42,17 +42,6 @@ public:
               const char                 *ip_format,
               va_list                     io_args);
 
-    bool send_emb(enum e_p8_level             ie_level,
-                  p_p8_module                 ip_module,
-                  uint64_t                    iu_trace_id,
-                  uint32_t                    iu_line,
-                  const char                 *ip_file,
-                  const char                 *ip_function,
-                  size_t                      iz_attrs,
-                  const struct s_p8_attr_val *ip_attrs,
-                  const char                **ip_format,
-                  va_list                    *ip_va_list);
-
     static size_t parse_format_string(struct s_p8_trace_arg *op_args, size_t iz_args_max, const char *ip_format);
 
 private:

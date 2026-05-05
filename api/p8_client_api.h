@@ -295,7 +295,7 @@ extern "C"
     /// @param iz_attrs [in] number of elements in ip_attrs array; pass 0 when no attributes are attached
     /// @param ip_attrs [in] pointer to array of s_p8_attr_val of length iz_attrs; each element must carry
     ///                      an ID obtained from p8_attr_register and a value matching the registered type
-    /// @param ip_format [in] format string address, for format specification please refer to documentation, all
+    /// @param ip_format [in] format string, for format specification please refer to documentation, all
     /// standard format options are supported, and in addition few custom
     /// @param ip_va_list [in] variable arguments list
     /// @return true - success, false - failure
@@ -307,7 +307,7 @@ extern "C"
                          const char                 *ip_function,
                          size_t                      iz_attrs,
                          const struct s_p8_attr_val *ip_attrs,
-                         const char                **ip_format,
+                         const char                 *ip_format,
                          va_list                    *ip_va_list);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -772,31 +772,6 @@ lbl_finalize:
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool cp8_log::send_emb(enum e_p8_level             ie_level,
-                       p_p8_module                 ip_module,
-                       uint64_t                    iu_trace_id,
-                       uint32_t                    iu_line,
-                       const char                 *ip_file,
-                       const char                 *ip_function,
-                       size_t                      iz_attrs,
-                       const struct s_p8_attr_val *ip_attrs,
-                       const char                **ip_format,
-                       va_list                    *ip_va_list)
-{
-    (void)ie_level;
-    (void)ip_module;
-    (void)iu_trace_id;
-    (void)iu_line;
-    (void)ip_file;
-    (void)ip_function;
-    (void)iz_attrs;
-    (void)ip_attrs;
-    (void)ip_format;
-    (void)ip_va_list;
-    return false;
-}
-
 extern "C"
 {
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -837,7 +812,7 @@ extern "C"
     {
         va_list lo_args;
         va_start(lo_args, ip_format);
-        bool lb_result = go_tls_log.send(ie_level,
+        bool lb_result = p8_log_sent_emb(ie_level,
                                          ip_module,
                                          iu_trace_id,
                                          iu_line,
@@ -846,7 +821,7 @@ extern "C"
                                          iz_attrs,
                                          ip_attrs,
                                          ip_format,
-                                         lo_args);
+                                         &lo_args);
         va_end(lo_args);
         return lb_result;
     }
@@ -860,19 +835,19 @@ extern "C"
                          const char                 *ip_function,
                          size_t                      iz_attrs,
                          const struct s_p8_attr_val *ip_attrs,
-                         const char                **ip_format,
+                         const char                 *ip_format,
                          va_list                    *ip_va_list)
     {
-        return go_tls_log.send_emb(ie_level,
-                                   ip_module,
-                                   iu_trace_id,
-                                   iu_line,
-                                   ip_file,
-                                   ip_function,
-                                   iz_attrs,
-                                   ip_attrs,
-                                   ip_format,
-                                   ip_va_list);
+        return go_tls_log.send(ie_level,
+                               ip_module,
+                               iu_trace_id,
+                               iu_line,
+                               ip_file,
+                               ip_function,
+                               iz_attrs,
+                               ip_attrs,
+                               ip_format,
+                               *ip_va_list);
     }
 
 } // extern "C"
