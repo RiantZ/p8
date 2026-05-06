@@ -812,7 +812,7 @@ extern "C"
     {
         va_list lo_args;
         va_start(lo_args, ip_format);
-        bool lb_result = p8_log_sent_emb(ie_level,
+        bool lb_result = go_tls_log.send(ie_level,
                                          ip_module,
                                          iu_trace_id,
                                          iu_line,
@@ -821,7 +821,7 @@ extern "C"
                                          iz_attrs,
                                          ip_attrs,
                                          ip_format,
-                                         &lo_args);
+                                         lo_args);
         va_end(lo_args);
         return lb_result;
     }
