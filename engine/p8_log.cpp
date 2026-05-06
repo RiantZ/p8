@@ -2,10 +2,8 @@
 #include "p8_hash.hpp"
 #include "p8_protocol.h"
 
-#include <functional>
 #include <stdint.h>
 #include <string.h>
-#include <thread>
 #include <wchar.h>
 
 #include "kit/time.hpp"
@@ -348,33 +346,6 @@ size_t cp8_log::parse_format_string(struct s_p8_trace_arg *op_args, size_t iz_ar
 static thread_local cp8_log go_tls_log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-cp8_log::cp8_log()
-    : mp_core(cp8_core::get_global_core(P8_CORE_ACQUIRE_TIMEOUT_MS))
-    , mu_thread_id(static_cast<uint32_t>(std::hash<std::thread::id> {}(std::this_thread::get_id())))
-{
-    if(mp_core)
-    {
-        mp_core->addref();
-        mz_buf_sz = mp_core->get_buffer_size();
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-cp8_log::~cp8_log()
-{
-    if(mp_core)
-    {
-        if(mp_buffer)
-        {
-            mp_core->release_buffer(mp_buffer);
-            mp_buffer = nullptr;
-        }
-        mp_core->release();
-        mp_core = nullptr;
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void cp8_log::set_verbosity(p_p8_module ip_module, enum e_p8_level ie_verbosity)
 {
     (void)ip_module;
@@ -405,31 +376,6 @@ p_p8_module cp8_log::find_module(const char *ip_name)
 {
     (void)ip_name;
     return P8_MODULE_INVALID_ID;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static size_t serialize_utf8_string(uint8_t *op_dst, size_t iz_avail, const char *ip_str)
-{
-    uint16_t lu_len = 0;
-
-    if(ip_str)
-    {
-        size_t lz_slen = strlen(ip_str);
-        lu_len         = (lz_slen > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_slen);
-    }
-
-    if(sizeof(lu_len) + lu_len > iz_avail)
-    {
-        return 0;
-    }
-
-    memcpy(op_dst, &lu_len, sizeof(lu_len));
-    if(lu_len)
-    {
-        memcpy(op_dst + sizeof(lu_len), ip_str, lu_len);
-    }
-
-    return sizeof(lu_len) + lu_len;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -683,72 +629,11 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     lp_hdr->mu_args_size
         = static_cast<uint16_t>(lp_dst - reinterpret_cast<uint8_t *>(lp_hdr) - sizeof(struct s_p8_log_item_hdr));
 
-    // serialize attributes: sync cache on demand, then encode
+    // serialize attributes
     {
-        uint8_t lu_attrs_written = 0;
-        for(size_t lz_i = 0; ip_attrs && lz_i < iz_attrs; ++lz_i)
-        {
-            p8_attr_id li_id  = ip_attrs[lz_i].m_id;
-            size_t     lz_idx = static_cast<size_t>(li_id);
-
-            if(li_id < 0)
-            {
-                // TODO: print error that attr is skipped
-                continue;
-            }
-
-            if(lz_idx >= mo_attr_cache.size() || !mo_attr_cache[lz_idx])
-            {
-                mp_core->sync_attr_cache(mo_attr_cache);
-
-                if(lz_idx >= mo_attr_cache.size() || !mo_attr_cache[lz_idx])
-                {
-                    // TODO: print error that attr is skipped
-                    continue;
-                }
-            }
-
-            const s_p8_attr_desc *lp_attr_desc = mo_attr_cache[lz_idx];
-
-            // We are not serialyzing type here - we going to send it from the core.
-            if(lp_attr_desc->me_type == e_p8_attr_str)
-            {
-                size_t lz_remain = static_cast<size_t>(lp_buf_end - lp_dst);
-                size_t lz_hdr_sz = sizeof(p8_attr_id);
-                if(lz_remain < lz_hdr_sz)
-                {
-                    break;
-                }
-
-                memcpy(lp_dst, &li_id, sizeof(p8_attr_id));
-                lp_dst += sizeof(p8_attr_id);
-
-                size_t lz_written
-                    = serialize_utf8_string(lp_dst, static_cast<size_t>(lp_buf_end - lp_dst), ip_attrs[lz_i].mp_str);
-                if(lz_written == 0)
-                {
-                    lp_dst -= lz_hdr_sz;
-                    break;
-                }
-                lp_dst += lz_written;
-            }
-            else
-            {
-                size_t lz_needed = sizeof(p8_attr_id) + sizeof(uint64_t);
-                if(lp_dst + lz_needed > lp_buf_end)
-                {
-                    break;
-                }
-
-                memcpy(lp_dst, &li_id, sizeof(p8_attr_id));
-                lp_dst += sizeof(p8_attr_id);
-                memcpy(lp_dst, &ip_attrs[lz_i].mu_u64, sizeof(uint64_t));
-                lp_dst += sizeof(uint64_t);
-            }
-
-            lu_attrs_written++;
-        }
-        lp_hdr->mu_attrs_count = lu_attrs_written;
+        s_p8_attrs_result lo_attrs  = serialize_attrs(lp_dst, lp_buf_end, ip_attrs, iz_attrs);
+        lp_dst                     += lo_attrs.mz_bytes;
+        lp_hdr->mu_attrs_count      = lo_attrs.mu_count;
     }
 
     lp_hdr->mu_size = static_cast<uint16_t>(lp_dst - reinterpret_cast<uint8_t *>(lp_hdr));

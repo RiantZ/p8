@@ -3,6 +3,8 @@ add_library(p8 STATIC
             "${P8_API}/p8_config.h"
             p8_core.hpp
             p8_core.cpp
+            p8_tls_writer.hpp
+            p8_tls_writer.cpp
             p8_log.hpp
             p8_log.cpp
             p8_mtk.hpp

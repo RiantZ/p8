@@ -1,6 +1,6 @@
 #pragma once
 
-#include "p8_core.hpp"
+#include "p8_tls_writer.hpp"
 #include "p8_protocol.h"
 
 #include "kit/spin_lock.hpp"
@@ -19,12 +19,9 @@ struct s_p8_log_desc
     s_p8_trace_arg ma_args[P8_LOG_MAX_ARGS];
 };
 
-class cp8_log
+class cp8_log : public cp8_tls_writer
 {
 public:
-    cp8_log();
-    ~cp8_log();
-
     void            set_verbosity(p_p8_module ip_module, enum e_p8_level ie_verbosity);
     enum e_p8_level get_verbosity(p_p8_module ip_module);
 
@@ -45,12 +42,6 @@ public:
     static size_t parse_format_string(struct s_p8_trace_arg *op_args, size_t iz_args_max, const char *ip_format);
 
 private:
-    cp8_core                           *mp_core = nullptr;
     kit::c_spin_lock                    mo_lock;
-    uint8_t                            *mp_buffer = nullptr;
-    size_t                              mz_offset = 0;
-    size_t                              mz_buf_sz = 0;
     std::map<uint64_t, s_p8_log_desc *> mo_desc_map;
-    std::vector<const s_p8_attr_desc *> mo_attr_cache;
-    uint32_t                            mu_thread_id = 0;
 };
