@@ -199,6 +199,8 @@ void cp8_core::release()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool cp8_core::init_buffer_pool(const char *ip_max_memory_size, const char *ip_initial_memory_size)
 {
+    mz_total_allocated = 0;
+
     if(ip_max_memory_size)
     {
         if(!parse_size(ip_max_memory_size, mz_max_memory_size))
