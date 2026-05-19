@@ -18,6 +18,9 @@ python scripts/cmake_build.py
 # Configure + build
 python scripts/cmake_build.py --build
 
+# Configure + build using presets
+python scripts/cmake_build.py --preset macos --build
+
 # Clean build (wipe build directory, then configure + build)
 python scripts/cmake_build.py --clean --build
 ```
@@ -33,6 +36,12 @@ Build output is placed in a platform-specific directory at the project root:
 | Linux    | `_Build_lnx/` | `linux`   |
 
 You can also invoke CMake directly with a preset: `cmake --preset macos`.
+
+### Formatting
+The pre-commit hooks required code to be formatted using Clang format, to format code please use command:
+```bash
+python scripts/code_format.py --format --staged
+```
 
 ### Testing
 
