@@ -67,7 +67,7 @@ static const struct s_prefix_desc *find_prefix(const char *ip_fmt)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-size_t cp8_log::parse_format_string(struct s_p8_trace_arg *op_args, size_t iz_args_max, const char *ip_format)
+size_t cp8_log::parse_format_string(struct s_p8_log_varg *op_args, size_t iz_args_max, const char *ip_format)
 {
     size_t             lz_count     = 0;
     const char        *lp_iter      = ip_format;
@@ -462,10 +462,6 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         return false;
     }
 
-    // TODO: AZH: add main buffer header where we are storing
-    //  - buffer type (log, traces, metrics)
-    //  - payload size - update only if function succeed
-
     // buffer availability check — reuse current buffer when possible
     if(mp_buffer) [[likely]]
     {
@@ -485,8 +481,16 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         {
             return false;
         }
-        mz_offset = 0;
-        lz_avail  = mz_buf_sz;
+        s_p8_data_buf_hdr *lp_buf_hdr = reinterpret_cast<s_p8_data_buf_hdr *>(mp_buffer);
+        lp_buf_hdr->mu_packet_type    = P8_PACKET_LOGS;
+        lp_buf_hdr->mu_flags          = 0;
+        lp_buf_hdr->mu_size           = static_cast<uint16_t>(sizeof(struct s_p8_data_buf_hdr));
+        lp_buf_hdr->mu_thread_id      = mu_thread_id;
+        lp_buf_hdr->mu_start_time     = kit::get_hires_ticks();
+        lp_buf_hdr->mu_stop_time      = 0;
+
+        mz_offset                     = sizeof(s_p8_data_buf_hdr);
+        lz_avail                      = mz_buf_sz - mz_offset;
     }
 
     // compute hash from file + line
@@ -515,25 +519,25 @@ bool cp8_log::send(enum e_p8_level             ie_level,
 
     // write item header
     {
-        uint8_t *lp_base        = mp_buffer + mz_offset;
-        lp_buf_end              = mp_buffer + mz_buf_sz;
+        uint8_t *lp_base       = mp_buffer + mz_offset;
+        lp_buf_end             = mp_buffer + mz_buf_sz;
 
-        lp_hdr                  = reinterpret_cast<struct s_p8_log_item_hdr *>(lp_base);
-        lp_hdr->mu_hash         = lp_desc->mu_hash;
-        lp_hdr->mu_timestamp_ns = kit::get_hires_ticks();
-        lp_hdr->mu_trace_id     = iu_trace_id;
-        lp_hdr->mu_thread_id    = mu_thread_id;
-        lp_hdr->mu_level        = static_cast<uint8_t>(ie_level);
-        lp_hdr->mu_processor    = 0; // TODO: platform-specific CPU core ID
-        lp_hdr->mu_attrs_count  = static_cast<uint8_t>(iz_attrs > 255 ? 255 : iz_attrs);
+        lp_hdr                 = reinterpret_cast<struct s_p8_log_item_hdr *>(lp_base);
+        lp_hdr->mu_hash        = lp_desc->mu_hash;
+        lp_hdr->mu_timestamp   = kit::get_hires_ticks();
+        lp_hdr->mu_trace_id    = iu_trace_id;
+        lp_hdr->mu_thread_id   = mu_thread_id;
+        lp_hdr->mu_level       = static_cast<uint8_t>(ie_level);
+        lp_hdr->mu_processor   = 0; // TODO: platform-specific CPU core ID
+        lp_hdr->mu_attrs_count = static_cast<uint8_t>(iz_attrs > 255 ? 255 : iz_attrs);
 
-        lp_dst                  = lp_base + sizeof(struct s_p8_log_item_hdr);
+        lp_dst                 = lp_base + sizeof(struct s_p8_log_item_hdr);
     }
 
     // serialize variable arguments via pointer iteration
     {
-        const s_p8_trace_arg *lp_arg     = lp_desc->ma_args;
-        const s_p8_trace_arg *lp_arg_end = lp_arg + lp_desc->mz_args_count;
+        const s_p8_log_varg *lp_arg     = lp_desc->ma_args;
+        const s_p8_log_varg *lp_arg_end = lp_arg + lp_desc->mz_args_count;
 
         for(; lp_arg < lp_arg_end; ++lp_arg)
         {
@@ -638,6 +642,12 @@ bool cp8_log::send(enum e_p8_level             ie_level,
 
     lp_hdr->mu_size = static_cast<uint16_t>(lp_dst - reinterpret_cast<uint8_t *>(lp_hdr));
     mz_offset       = static_cast<size_t>(lp_dst - mp_buffer);
+
+    {
+        struct s_p8_data_buf_hdr *lp_buf_hdr = reinterpret_cast<struct s_p8_data_buf_hdr *>(mp_buffer);
+        lp_buf_hdr->mu_size                  = static_cast<uint16_t>(mz_offset);
+        lp_buf_hdr->mu_stop_time             = lp_hdr->mu_timestamp;
+    }
 
 lbl_finalize:
     if(!lb_ret)

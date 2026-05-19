@@ -8,7 +8,7 @@ static const size_t MAX_ARGS = 32;
 class c_log_format_test : public ::testing::Test
 {
 protected:
-    struct s_p8_trace_arg mo_args[MAX_ARGS];
+    struct s_p8_log_varg mo_args[MAX_ARGS];
 
     void SetUp() override
     {

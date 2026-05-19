@@ -18,6 +18,8 @@ extern "C"
     #define P8_SIZE_OF_ARG(t) ((uint8_t)(((sizeof(t)) + 3u) & ~3u))
 #endif
 
+#define P8_PACKET_MAX_SIZE      (1 << 16) // 64KB max page
+
 #define P8_PACKET_MAIN          0
 #define P8_PACKET_LOGS          1
 #define P8_PACKET_TRACES        2
@@ -49,6 +51,28 @@ extern "C"
         uint64_t mu_hash; // header control hash
     };
 
+#define P8_DATA_FLAG_FRAGMENT   (1 << 0) // head data in buffer contains tail from the prev. buffer
+#define P8_DATA_FLAG_RESERVED_1 (1 << 1)
+#define P8_DATA_FLAG_RESERVED_2 (1 << 2)
+#define P8_DATA_FLAG_RESERVED_3 (1 << 3)
+#define P8_DATA_FLAG_RESERVED_4 (1 << 4)
+#define P8_DATA_FLAG_RESERVED_5 (1 << 5)
+#define P8_DATA_FLAG_RESERVED_6 (1 << 6)
+#define P8_DATA_FLAG_RESERVED_7 (1 << 7)
+
+    struct s_p8_data_buf_hdr
+    {
+        uint8_t  mu_packet_type; // P8_PACKET_XXXX
+        uint8_t  mu_flags;       // P8_DATA_FLAG_XXX
+        uint16_t mu_size;        // size in bytes
+        uint32_t mu_thread_id;   // thread ID which emits data
+        uint64_t mu_start_time;  // first timestamp
+        uint64_t mu_stop_time;   // last timestamp
+    };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// LOGS
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #define P8_ARG_TYPE_UNK     0x00
 #define P8_ARG_TYPE_CHAR    0x01
 #define P8_ARG_TYPE_INT8    0x01
@@ -66,7 +90,7 @@ extern "C"
 #define P8_ARG_TYPE_INTMAX  0x0D
 #define P8_ARG_TYPE_LDOUBLE 0x0E
 
-    struct s_p8_trace_arg
+    struct s_p8_log_varg
     {
         uint8_t mu_type; // var arg type: P8_ARG_TYPE_XXXXXX
         uint8_t mu_size; // var arg size in bytes
@@ -74,19 +98,26 @@ extern "C"
 
 #define P8_LOG_MAX_ARGS         32
 #define P8_LOG_MIN_BUFFER_SPACE 256
-
     struct s_p8_log_item_hdr
     {
-        uint64_t mu_hash;         // log descriptor hash (key into descriptor tree)
-        uint64_t mu_timestamp_ns; // monotonic clock, nanoseconds
-        uint64_t mu_trace_id;     // distributed trace correlation ID
-        uint32_t mu_thread_id;    // OS thread ID
-        uint16_t mu_size;         // total item size in bytes (header + args + attrs)
-        uint8_t  mu_level;        // e_p8_level
-        uint8_t  mu_processor;    // CPU core ID
-        uint16_t mu_args_size;    // serialized variable arguments size in bytes
-        uint8_t  mu_attrs_count;  // number of serialized attributes
-        uint8_t  mu_padding[5];   // align to 8-byte boundary
+        uint64_t mu_hash;      // log descriptor hash (key into descriptor tree)
+        uint64_t mu_timestamp; // monotonic clock timestamp
+        uint64_t mu_trace_id;  // distributed trace correlation ID
+
+        // 64 bits
+        uint32_t mu_thread_id; // OS thread ID
+        uint8_t  mu_level;     // e_p8_level
+        uint8_t  mu_processor; // CPU core ID
+        uint16_t mu_args_size; // serialized variable arguments size in bytes
+
+        // 64 bits
+        uint32_t mu_size;         // total item size in bytes (header + args + attrs)
+        uint16_t mu_attrs_count;  // number of serialized attributes
+        uint8_t  mu_padding_size; // log item data is alligned in 8 bytes, the value is padding length in bytes
+        uint8_t  mu_flags;        // todo
+        //* Serialized Variable agruments ...
+        //* Serialized attributes [s_p8_attr + data][...]
+        //* padding to aling size on 8 bytes boundary
     };
 
 #ifdef __cplusplus
