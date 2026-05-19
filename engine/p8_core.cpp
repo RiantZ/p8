@@ -23,6 +23,19 @@
 #include <thread>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Protocol structures must be 8-byte aligned so that uint64_t members can be accessed without unaligned loads when
+// items are packed sequentially in shared-memory buffers.  A misaligned 64-bit read is either a fault (strict-align
+// architectures) or a silent performance penalty (x86), so we enforce the invariant at compile time.
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static_assert(sizeof(struct s_p8_hdr) % 8 == 0, "s_p8_hdr size must be a multiple of 8 bytes");
+static_assert(sizeof(struct s_p8_data_buf_hdr) % 8 == 0, "s_p8_data_buf_hdr size must be a multiple of 8 bytes");
+static_assert(sizeof(struct s_p8_log_item_hdr) % 8 == 0, "s_p8_log_item_hdr size must be a multiple of 8 bytes");
+
+static_assert(alignof(struct s_p8_hdr) >= 8, "s_p8_hdr must have at least 8-byte alignment");
+static_assert(alignof(struct s_p8_data_buf_hdr) >= 8, "s_p8_data_buf_hdr must have at least 8-byte alignment");
+static_assert(alignof(struct s_p8_log_item_hdr) >= 8, "s_p8_log_item_hdr must have at least 8-byte alignment");
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // singleton state
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
