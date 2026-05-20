@@ -53,6 +53,24 @@ cd _Build_mac && ctest
 cd _Build_mac && ./tests/regression/P8_RegressionTests --gtest_filter="c_log_perf_test.*" --gtest_also_run_disabled_tests
 ```
 
+### Performance baselines
+
+Performance tests are disabled in the normal test suite and must be run explicitly.
+The build must use `Release` configuration (`CMAKE_BUILD_TYPE=Release`, the default for macOS/Linux presets).
+
+```bash
+cd _Build_mac && ./tests/regression/P8_RegressionTests \
+    --gtest_filter="c_log_perf_test.*" \
+    --gtest_also_run_disabled_tests
+```
+
+Reference numbers (Apple M4 Max, macOS, Release):
+
+| Test | Per call | Iterations |
+|------|----------|------------|
+| `send_hello_d_no_attrs` | 22 ns | 1 000 000 |
+| `send_hello_d_3_attrs` (str + i64 + f64) | 38 ns | 1 000 000 |
+
 ### Custom presets
 
 To override settings without changing tracked files, create `CMakeUserPresets.json` (git-ignored) in the project root. A preset defined there can inherit from any base preset in `CMakePresets.json`.
