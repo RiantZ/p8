@@ -176,7 +176,7 @@ TEST_F(c_log_fragment_test, discard_when_pool_exhausted)
     ASSERT_TRUE(p8_initialize(&lo_config));
     ASSERT_EQ(p8_test_get_free_buffers_count(), 1u);
 
-    bool lb_result = true;
+    bool        lb_result = true;
     std::thread lo_thread(
         [&lb_result]()
         {

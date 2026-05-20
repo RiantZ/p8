@@ -37,12 +37,12 @@ cp8_tls_writer::~cp8_tls_writer()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool cp8_tls_writer::flush_and_acquire_fragment(uint64_t iu_timestamp)
 {
-    s_p8_data_buf_hdr *lp_buf_hdr    = reinterpret_cast<s_p8_data_buf_hdr *>(mp_buffer);
-    uint8_t            lu_packet_type = lp_buf_hdr->mu_packet_type;
+    s_p8_data_buf_hdr *lp_buf_hdr      = reinterpret_cast<s_p8_data_buf_hdr *>(mp_buffer);
+    uint8_t            lu_packet_type  = lp_buf_hdr->mu_packet_type;
 
-    lp_buf_hdr->mu_flags            |= P8_DATA_FLAG_FRAGMENT;
-    lp_buf_hdr->mu_size              = static_cast<uint16_t>(mz_offset);
-    lp_buf_hdr->mu_stop_time         = iu_timestamp;
+    lp_buf_hdr->mu_flags              |= P8_DATA_FLAG_FRAGMENT;
+    lp_buf_hdr->mu_size                = static_cast<uint16_t>(mz_offset);
+    lp_buf_hdr->mu_stop_time           = iu_timestamp;
 
     mo_fragments.push_last(mp_buffer);
 
