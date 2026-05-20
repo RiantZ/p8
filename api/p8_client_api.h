@@ -273,6 +273,7 @@ extern "C"
     /// format options are supported, and in addition few custom
     /// @param ... [in] variable arguments list
     /// @return true - success, false - failure
+    // log("My log %d, %s", 10, "my")
     bool p8_log_sent(enum e_p8_level             ie_level,
                      p_p8_module                 ip_module,
                      uint64_t                    iu_trace_id,

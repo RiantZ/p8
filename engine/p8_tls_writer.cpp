@@ -1,8 +1,11 @@
 #include "p8_tls_writer.hpp"
+#include "p8_protocol.h"
 
 #include <cstring>
 #include <functional>
 #include <thread>
+
+#include "kit/time.hpp"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 cp8_tls_writer::cp8_tls_writer()
@@ -29,6 +32,37 @@ cp8_tls_writer::~cp8_tls_writer()
         mp_core->release();
         mp_core = nullptr;
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool cp8_tls_writer::flush_and_acquire_fragment(uint64_t iu_timestamp)
+{
+    s_p8_data_buf_hdr *lp_buf_hdr    = reinterpret_cast<s_p8_data_buf_hdr *>(mp_buffer);
+    uint8_t            lu_packet_type = lp_buf_hdr->mu_packet_type;
+
+    lp_buf_hdr->mu_flags            |= P8_DATA_FLAG_FRAGMENT;
+    lp_buf_hdr->mu_size              = static_cast<uint16_t>(mz_offset);
+    lp_buf_hdr->mu_stop_time         = iu_timestamp;
+
+    mo_fragments.push_last(mp_buffer);
+
+    mp_buffer = mp_core->acquire_buffer();
+    if(!mp_buffer) [[unlikely]]
+    {
+        return false;
+    }
+
+    lp_buf_hdr                 = reinterpret_cast<s_p8_data_buf_hdr *>(mp_buffer);
+    lp_buf_hdr->mu_packet_type = lu_packet_type;
+    lp_buf_hdr->mu_flags       = 0;
+    lp_buf_hdr->mu_size        = static_cast<uint16_t>(sizeof(s_p8_data_buf_hdr));
+    lp_buf_hdr->mu_thread_id   = mu_thread_id;
+    lp_buf_hdr->mu_start_time  = iu_timestamp;
+    lp_buf_hdr->mu_stop_time   = 0;
+
+    mz_offset                  = sizeof(s_p8_data_buf_hdr);
+
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

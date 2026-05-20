@@ -52,6 +52,7 @@ public:
     static size_t get_buffer_size();
     uint8_t      *acquire_buffer();
     void          release_buffer(uint8_t *ip_buffer);
+    void          release_buffers(kit::c_lst<uint8_t *> &io_buffers);
 
     // log descriptors
     struct s_p8_log_desc *resolve_log_desc(uint64_t    iu_hash,
@@ -100,6 +101,14 @@ private:
     friend size_t p8_test_get_free_buffers_count();
     friend size_t p8_test_get_total_allocated();
     friend size_t p8_test_get_all_buffers_count();
+    friend void   p8_test_enable_buffer_capture();
+    friend void   p8_test_disable_buffer_capture();
+    friend size_t p8_test_get_captured_count();
+    friend const std::vector<std::vector<uint8_t>> &p8_test_get_captured_buffers();
+    friend void   p8_test_clear_captured_buffers();
+
+    bool                              mb_capture_enabled = false;
+    std::vector<std::vector<uint8_t>> mo_captured_buffers;
 #endif
 };
 
@@ -112,4 +121,10 @@ size_t   p8_test_get_total_allocated();
 size_t   p8_test_get_all_buffers_count();
 uint8_t *p8_test_acquire_buffer();
 void     p8_test_release_buffer(uint8_t *ip_buffer);
+
+void                                        p8_test_enable_buffer_capture();
+void                                        p8_test_disable_buffer_capture();
+size_t                                      p8_test_get_captured_count();
+const std::vector<std::vector<uint8_t>>    &p8_test_get_captured_buffers();
+void                                        p8_test_clear_captured_buffers();
 #endif

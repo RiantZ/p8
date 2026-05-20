@@ -444,7 +444,36 @@ void cp8_core::release_buffer(uint8_t *ip_buffer)
         return;
     }
     std::lock_guard<std::mutex> lo_lock(mo_pool_mutex);
+#ifdef P8_TESTING
+    if(mb_capture_enabled)
+    {
+        mo_captured_buffers.emplace_back(ip_buffer, ip_buffer + mz_buffer_size);
+    }
+#endif
     mo_free_buffers.push_last(ip_buffer);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::release_buffers(kit::c_lst<uint8_t *> &io_buffers)
+{
+    if(0 == io_buffers.size())
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lo_lock(mo_pool_mutex);
+
+    while(io_buffers.size() > 0)
+    {
+        uint8_t *lp_buf = io_buffers.pull_first();
+#ifdef P8_TESTING
+        if(mb_capture_enabled)
+        {
+            mo_captured_buffers.emplace_back(lp_buf, lp_buf + mz_buffer_size);
+        }
+#endif
+        mo_free_buffers.push_last(lp_buf);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -741,6 +770,55 @@ void p8_test_release_buffer(uint8_t *ip_buffer)
     if(gp_instance)
     {
         gp_instance->release_buffer(ip_buffer);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void p8_test_enable_buffer_capture()
+{
+    if(gp_instance)
+    {
+        std::lock_guard<std::mutex> lo_lock(gp_instance->mo_pool_mutex);
+        gp_instance->mo_captured_buffers.clear();
+        gp_instance->mb_capture_enabled = true;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void p8_test_disable_buffer_capture()
+{
+    if(gp_instance)
+    {
+        std::lock_guard<std::mutex> lo_lock(gp_instance->mo_pool_mutex);
+        gp_instance->mb_capture_enabled = false;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+size_t p8_test_get_captured_count()
+{
+    if(!gp_instance)
+    {
+        return 0;
+    }
+    std::lock_guard<std::mutex> lo_lock(gp_instance->mo_pool_mutex);
+    return gp_instance->mo_captured_buffers.size();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+const std::vector<std::vector<uint8_t>> &p8_test_get_captured_buffers()
+{
+    static const std::vector<std::vector<uint8_t>> lo_empty;
+    return gp_instance ? gp_instance->mo_captured_buffers : lo_empty;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void p8_test_clear_captured_buffers()
+{
+    if(gp_instance)
+    {
+        std::lock_guard<std::mutex> lo_lock(gp_instance->mo_pool_mutex);
+        gp_instance->mo_captured_buffers.clear();
     }
 }
 

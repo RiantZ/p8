@@ -27,6 +27,8 @@ protected:
                                       const struct s_p8_attr_val *ip_attrs,
                                       size_t                      iz_attrs);
 
+    bool flush_and_acquire_fragment(uint64_t iu_timestamp);
+
     static size_t serialize_utf8_string(uint8_t *op_dst, size_t iz_avail, const char *ip_str);
 
     cp8_core                           *mp_core   = nullptr;
@@ -34,5 +36,6 @@ protected:
     size_t                              mz_offset = 0;
     size_t                              mz_buf_sz = 0;
     std::vector<const s_p8_attr_desc *> mo_attr_cache;
+    kit::c_lst<uint8_t *>               mo_fragments { 16 };
     uint32_t                            mu_thread_id = 0;
 };

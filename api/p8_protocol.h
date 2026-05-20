@@ -51,7 +51,7 @@ extern "C"
         uint64_t mu_hash; // header control hash
     };
 
-#define P8_DATA_FLAG_FRAGMENT   (1 << 0) // head data in buffer contains tail from the prev. buffer
+#define P8_DATA_FLAG_FRAGMENT   (1 << 0) // buffer tail data continues in the next buffer for the same thread
 #define P8_DATA_FLAG_RESERVED_1 (1 << 1)
 #define P8_DATA_FLAG_RESERVED_2 (1 << 2)
 #define P8_DATA_FLAG_RESERVED_3 (1 << 3)
@@ -97,7 +97,7 @@ extern "C"
     };
 
 #define P8_LOG_MAX_ARGS         32
-#define P8_LOG_MIN_BUFFER_SPACE 256
+#define P8_LOG_MIN_BUFFER_SPACE 32
     struct s_p8_log_item_hdr
     {
         uint64_t mu_hash;      // log descriptor hash (key into descriptor tree)
@@ -115,8 +115,8 @@ extern "C"
         uint16_t mu_attrs_count;  // number of serialized attributes
         uint8_t  mu_padding_size; // log item data is alligned in 8 bytes, the value is padding length in bytes
         uint8_t  mu_flags;        // todo
-        //* Serialized Variable agruments ...
-        //* Serialized attributes [s_p8_attr + data][...]
+        //* Serialized Variable agruments [int32][int64][double][16b length + string data] ...
+        //* Serialized attributes [p8_attr_id + data][...]
         //* padding to aling size on 8 bytes boundary
     };
 
