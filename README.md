@@ -18,6 +18,9 @@ python scripts/cmake_build.py
 # Configure + build
 python scripts/cmake_build.py --build
 
+# Configure + build using presets
+python scripts/cmake_build.py --preset macos --build
+
 # Clean build (wipe build directory, then configure + build)
 python scripts/cmake_build.py --clean --build
 ```
@@ -34,6 +37,12 @@ Build output is placed in a platform-specific directory at the project root:
 
 You can also invoke CMake directly with a preset: `cmake --preset macos`.
 
+### Formatting
+The pre-commit hooks required code to be formatted using Clang format, to format code please use command:
+```bash
+python scripts/code_format.py --format --staged
+```
+
 ### Testing
 
 ```bash
@@ -43,6 +52,24 @@ cd _Build_mac && ctest
 # Run performance tests (disabled by default, must be requested explicitly)
 cd _Build_mac && ./tests/regression/P8_RegressionTests --gtest_filter="c_log_perf_test.*" --gtest_also_run_disabled_tests
 ```
+
+### Performance baselines
+
+Performance tests are disabled in the normal test suite and must be run explicitly.
+The build must use `Release` configuration (`CMAKE_BUILD_TYPE=Release`, the default for macOS/Linux presets).
+
+```bash
+cd _Build_mac && ./tests/regression/P8_RegressionTests \
+    --gtest_filter="c_log_perf_test.*" \
+    --gtest_also_run_disabled_tests
+```
+
+Reference numbers (Apple M4 Max, macOS, Release):
+
+| Test | Per call | Iterations |
+|------|----------|------------|
+| `send_hello_d_no_attrs` | 22 ns | 1 000 000 |
+| `send_hello_d_3_attrs` (str + i64 + f64) | 38 ns | 1 000 000 |
 
 ### Custom presets
 

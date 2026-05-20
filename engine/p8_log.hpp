@@ -9,14 +9,14 @@
 
 struct s_p8_log_desc
 {
-    uint64_t       mu_hash;
-    const char    *mp_format;
-    const char    *mp_file;
-    const char    *mp_function;
-    uint32_t       mu_line;
-    size_t         mz_args_count;
-    size_t         mz_fixed_args_size;
-    s_p8_trace_arg ma_args[P8_LOG_MAX_ARGS];
+    uint64_t      mu_hash;
+    const char   *mp_format;
+    const char   *mp_file;
+    const char   *mp_function;
+    uint32_t      mu_line;
+    size_t        mz_args_count;
+    size_t        mz_fixed_args_size;
+    s_p8_log_varg ma_args[P8_LOG_MAX_ARGS];
 };
 
 class cp8_log : public cp8_tls_writer
@@ -39,7 +39,7 @@ public:
               const char                 *ip_format,
               va_list                     io_args);
 
-    static size_t parse_format_string(struct s_p8_trace_arg *op_args, size_t iz_args_max, const char *ip_format);
+    static size_t parse_format_string(struct s_p8_log_varg *op_args, size_t iz_args_max, const char *ip_format);
 
 private:
     kit::c_spin_lock                    mo_lock;

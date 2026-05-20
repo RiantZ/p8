@@ -67,7 +67,7 @@ static const struct s_prefix_desc *find_prefix(const char *ip_fmt)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-size_t cp8_log::parse_format_string(struct s_p8_trace_arg *op_args, size_t iz_args_max, const char *ip_format)
+size_t cp8_log::parse_format_string(struct s_p8_log_varg *op_args, size_t iz_args_max, const char *ip_format)
 {
     size_t             lz_count     = 0;
     const char        *lp_iter      = ip_format;
@@ -379,61 +379,6 @@ p_p8_module cp8_log::find_module(const char *ip_name)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static size_t serialize_wide_string(uint8_t *op_dst, size_t iz_avail, const wchar_t *ip_str)
-{
-    uint16_t lu_len = 0;
-
-    if(ip_str)
-    {
-        size_t lz_bytes = wcslen(ip_str) * sizeof(wchar_t);
-        lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
-    }
-
-    if(sizeof(lu_len) + lu_len > iz_avail)
-    {
-        return 0;
-    }
-
-    memcpy(op_dst, &lu_len, sizeof(lu_len));
-    if(lu_len)
-    {
-        memcpy(op_dst + sizeof(lu_len), ip_str, lu_len);
-    }
-
-    return sizeof(lu_len) + lu_len;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static size_t serialize_u16_string(uint8_t *op_dst, size_t iz_avail, const uint16_t *ip_str)
-{
-    uint16_t lu_len = 0;
-
-    if(ip_str)
-    {
-        size_t lz_chars = 0;
-        while(ip_str[lz_chars])
-        {
-            lz_chars++;
-        }
-        size_t lz_bytes = lz_chars * sizeof(uint16_t);
-        lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
-    }
-
-    if(sizeof(lu_len) + lu_len > iz_avail)
-    {
-        return 0;
-    }
-
-    memcpy(op_dst, &lu_len, sizeof(lu_len));
-    if(lu_len)
-    {
-        memcpy(op_dst + sizeof(lu_len), ip_str, lu_len);
-    }
-
-    return sizeof(lu_len) + lu_len;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool cp8_log::send(enum e_p8_level             ie_level,
                    p_p8_module                 ip_module,
                    uint64_t                    iu_trace_id,
@@ -445,13 +390,14 @@ bool cp8_log::send(enum e_p8_level             ie_level,
                    const char                 *ip_format,
                    va_list                     io_args)
 {
-    struct s_p8_log_desc     *lp_desc    = nullptr;
-    struct s_p8_log_item_hdr *lp_hdr     = nullptr;
-    uint64_t                  lu_hash    = 0;
-    size_t                    lz_avail   = 0;
-    uint8_t                  *lp_dst     = nullptr;
-    uint8_t                  *lp_buf_end = nullptr;
-    bool                      lb_ret     = true;
+    struct s_p8_log_desc     *lp_desc          = nullptr;
+    struct s_p8_log_item_hdr *lp_hdr           = nullptr;
+    uint64_t                  lu_hash          = 0;
+    uint8_t                  *lp_dst           = nullptr;
+    uint8_t                  *lp_buf_end       = nullptr;
+    size_t                    lz_args_written  = 0;
+    size_t                    lz_attrs_written = 0;
+    uint8_t                   lu_attrs_count   = 0;
 
     (void)ip_module;
 
@@ -462,16 +408,10 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         return false;
     }
 
-    // TODO: AZH: add main buffer header where we are storing
-    //  - buffer type (log, traces, metrics)
-    //  - payload size - update only if function succeed
-
     // buffer availability check — reuse current buffer when possible
     if(mp_buffer) [[likely]]
     {
-        lz_avail = mz_buf_sz - mz_offset;
-
-        if(lz_avail < P8_LOG_MIN_BUFFER_SPACE) [[unlikely]]
+        if((mz_buf_max - mz_buf_used) < (P8_LOG_MIN_BUFFER_SPACE + sizeof(s_p8_log_item_hdr))) [[unlikely]]
         {
             mp_core->release_buffer(mp_buffer);
             mp_buffer = nullptr;
@@ -485,8 +425,15 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         {
             return false;
         }
-        mz_offset = 0;
-        lz_avail  = mz_buf_sz;
+        s_p8_data_buf_hdr *lp_buf_hdr = reinterpret_cast<s_p8_data_buf_hdr *>(mp_buffer);
+        lp_buf_hdr->mu_packet_type    = P8_PACKET_LOGS;
+        lp_buf_hdr->mu_flags          = 0;
+        lp_buf_hdr->mu_size           = static_cast<uint16_t>(sizeof(s_p8_data_buf_hdr));
+        lp_buf_hdr->mu_thread_id      = mu_thread_id;
+        lp_buf_hdr->mu_start_time     = kit::get_hires_ticks();
+        lp_buf_hdr->mu_stop_time      = 0;
+
+        mz_buf_used                   = sizeof(s_p8_data_buf_hdr);
     }
 
     // compute hash from file + line
@@ -507,154 +454,234 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         mo_desc_map[lu_hash] = lp_desc;
     }
 
-    // verify buffer space for header + fixed-size args at minimum
-    if(lz_avail < sizeof(s_p8_log_item_hdr) + lp_desc->mz_fixed_args_size) [[unlikely]]
-    {
-        return false;
-    }
-
     // write item header
     {
-        uint8_t *lp_base        = mp_buffer + mz_offset;
-        lp_buf_end              = mp_buffer + mz_buf_sz;
+        uint8_t *lp_base        = mp_buffer + mz_buf_used;
+        lp_buf_end              = mp_buffer + mz_buf_max;
 
         lp_hdr                  = reinterpret_cast<struct s_p8_log_item_hdr *>(lp_base);
         lp_hdr->mu_hash         = lp_desc->mu_hash;
-        lp_hdr->mu_timestamp_ns = kit::get_hires_ticks();
+        lp_hdr->mu_timestamp    = kit::get_hires_ticks();
         lp_hdr->mu_trace_id     = iu_trace_id;
         lp_hdr->mu_thread_id    = mu_thread_id;
         lp_hdr->mu_level        = static_cast<uint8_t>(ie_level);
-        lp_hdr->mu_processor    = 0; // TODO: platform-specific CPU core ID
-        lp_hdr->mu_attrs_count  = static_cast<uint8_t>(iz_attrs > 255 ? 255 : iz_attrs);
+        lp_hdr->mu_processor    = 0;
+        lp_hdr->mu_attrs_count  = 0;
+        lp_hdr->mu_padding_size = 0;
+        lp_hdr->mu_flags        = 0;
 
         lp_dst                  = lp_base + sizeof(struct s_p8_log_item_hdr);
     }
 
-    // serialize variable arguments via pointer iteration
+    // serialize variable arguments
     {
-        const s_p8_trace_arg *lp_arg     = lp_desc->ma_args;
-        const s_p8_trace_arg *lp_arg_end = lp_arg + lp_desc->mz_args_count;
+        const s_p8_log_varg *lp_arg     = lp_desc->ma_args;
+        const s_p8_log_varg *lp_arg_end = lp_arg + lp_desc->mz_args_count;
 
         for(; lp_arg < lp_arg_end; ++lp_arg)
         {
-            if(lp_dst + lp_arg->mu_size > lp_buf_end) [[unlikely]]
+            switch(lp_arg->mu_type)
             {
-                lb_ret = false;
-                goto lbl_finalize;
-            }
-#if defined(GTX32)
-            if(4 == lp_arg->mu_size)
+            case P8_ARG_TYPE_USTR8:
+            case P8_ARG_TYPE_STRA:
+            case P8_ARG_TYPE_USTR16:
+            case P8_ARG_TYPE_USTR32:
             {
-                unsigned int lu_val = va_arg(io_args, unsigned int);
-                memcpy(lp_dst, &lu_val, sizeof(lu_val));
-                lp_dst += lp_arg->mu_size;
-            }
-            else
-#endif
-                if(sizeof(uint64_t) == lp_arg->mu_size)
-            {
-                if(P8_ARG_TYPE_DOUBLE != lp_arg->mu_type) [[likely]]
+                const void *lp_str = nullptr;
+                uint16_t    lu_len = 0;
+
+                if(P8_ARG_TYPE_USTR16 == lp_arg->mu_type)
                 {
-                    uint64_t lu_val = va_arg(io_args, uint64_t);
-                    memcpy(lp_dst, &lu_val, sizeof(lu_val));
-                    lp_dst += lp_arg->mu_size;
+                    const uint16_t *lp_u16 = va_arg(io_args, const uint16_t *);
+                    lp_str                 = lp_u16;
+                    if(lp_u16)
+                    {
+                        size_t lz_chars = 0;
+                        while(lp_u16[lz_chars])
+                        {
+                            lz_chars++;
+                        }
+                        size_t lz_bytes = lz_chars * sizeof(uint16_t);
+                        lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
+                    }
+                }
+                else if(P8_ARG_TYPE_USTR32 == lp_arg->mu_type)
+                {
+                    const wchar_t *lp_w = va_arg(io_args, const wchar_t *);
+                    lp_str              = lp_w;
+                    if(lp_w)
+                    {
+                        size_t lz_bytes = wcslen(lp_w) * sizeof(wchar_t);
+                        lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
+                    }
                 }
                 else
                 {
-                    double ld_val = va_arg(io_args, double);
+                    const char *lp_c = va_arg(io_args, const char *);
+                    lp_str           = lp_c;
+                    if(lp_c)
+                    {
+                        size_t lz_slen = strlen(lp_c);
+                        lu_len         = (lz_slen > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_slen);
+                    }
+                }
+
+                P8_ENSURE_SPACE(lp_dst, lp_buf_end, sizeof(lu_len), lp_hdr->mu_timestamp);
+                memcpy(lp_dst, &lu_len, sizeof(lu_len));
+                lp_dst          += sizeof(lu_len);
+                lz_args_written += sizeof(lu_len);
+
+                if(!copy_fragmented(lp_dst, lp_buf_end, lp_str, lu_len, lp_hdr->mu_timestamp, lz_args_written))
+                {
+                    goto lbl_discard;
+                }
+                break;
+            }
+            default:
+            {
+                P8_ENSURE_SPACE(lp_dst, lp_buf_end, lp_arg->mu_size, lp_hdr->mu_timestamp);
+
+#if defined(GTX32)
+                if(4 == lp_arg->mu_size)
+                {
+                    unsigned int lu_val = va_arg(io_args, unsigned int);
+                    memcpy(lp_dst, &lu_val, sizeof(lu_val));
+                }
+                else
+#endif
+                    if(sizeof(uint64_t) == lp_arg->mu_size)
+                {
+                    if(P8_ARG_TYPE_DOUBLE != lp_arg->mu_type) [[likely]]
+                    {
+                        uint64_t lu_val = va_arg(io_args, uint64_t);
+                        memcpy(lp_dst, &lu_val, sizeof(lu_val));
+                    }
+                    else
+                    {
+                        double ld_val = va_arg(io_args, double);
+                        memcpy(lp_dst, &ld_val, sizeof(ld_val));
+                    }
+                }
+                else if(P8_ARG_TYPE_LDOUBLE == lp_arg->mu_type)
+                {
+                    long double ld_val = va_arg(io_args, long double);
                     memcpy(lp_dst, &ld_val, sizeof(ld_val));
-                    lp_dst += lp_arg->mu_size;
                 }
+
+                lp_dst          += lp_arg->mu_size;
+                lz_args_written += lp_arg->mu_size;
+                break;
             }
-            else if(P8_ARG_TYPE_LDOUBLE == lp_arg->mu_type)
-            {
-                long double ld_val = va_arg(io_args, long double);
-                memcpy(lp_dst, &ld_val, sizeof(ld_val));
-                lp_dst += lp_arg->mu_size;
-            }
-            else
-            {
-                switch(lp_arg->mu_type)
-                {
-                case P8_ARG_TYPE_USTR8:
-                case P8_ARG_TYPE_STRA:
-                {
-                    size_t      lz_remain  = static_cast<size_t>(lp_buf_end - lp_dst);
-                    const char *lp_str     = va_arg(io_args, const char *);
-                    size_t      lz_written = serialize_utf8_string(lp_dst, lz_remain, lp_str);
-                    if(0 == lz_written)
-                    {
-                        lb_ret = false;
-                        goto lbl_finalize;
-                    }
-                    lp_dst += lz_written;
-                    break;
-                }
-                case P8_ARG_TYPE_USTR16:
-                {
-                    size_t          lz_remain  = static_cast<size_t>(lp_buf_end - lp_dst);
-                    const uint16_t *lp_str     = va_arg(io_args, const uint16_t *);
-                    size_t          lz_written = serialize_u16_string(lp_dst, lz_remain, lp_str);
-                    if(0 == lz_written)
-                    {
-                        lb_ret = false;
-                        goto lbl_finalize;
-                    }
-                    lp_dst += lz_written;
-                    break;
-                }
-                case P8_ARG_TYPE_USTR32:
-                {
-                    size_t         lz_remain  = static_cast<size_t>(lp_buf_end - lp_dst);
-                    const wchar_t *lp_str     = va_arg(io_args, const wchar_t *);
-                    size_t         lz_written = serialize_wide_string(lp_dst, lz_remain, lp_str);
-                    if(0 == lz_written)
-                    {
-                        lb_ret = false;
-                        goto lbl_finalize;
-                    }
-                    lp_dst += lz_written;
-                    break;
-                }
-                default:
-                {
-                    std::fprintf(stderr, "p8_log: unknown argument %d\n", lp_arg->mu_type);
-                    break;
-                }
-                }
-            }
+            } // switch
         }
     }
 
-    lp_hdr->mu_args_size
-        = static_cast<uint16_t>(lp_dst - reinterpret_cast<uint8_t *>(lp_hdr) - sizeof(struct s_p8_log_item_hdr));
+    lp_hdr->mu_args_size = static_cast<uint16_t>(lz_args_written);
 
-    // serialize attributes
+    // serialize attributes inline with fragmentation support
+    for(size_t lz_i = 0; ip_attrs && lz_i < iz_attrs; ++lz_i)
     {
-        s_p8_attrs_result lo_attrs  = serialize_attrs(lp_dst, lp_buf_end, ip_attrs, iz_attrs);
-        lp_dst                     += lo_attrs.mz_bytes;
-        lp_hdr->mu_attrs_count      = lo_attrs.mu_count;
+        p8_attr_id li_id  = ip_attrs[lz_i].m_id;
+        size_t     lz_idx = static_cast<size_t>(li_id);
+
+        if(li_id < 0)
+        {
+            continue;
+        }
+
+        if(lz_idx >= mo_attr_cache.size() || !mo_attr_cache[lz_idx])
+        {
+            mp_core->sync_attr_cache(mo_attr_cache);
+            if(lz_idx >= mo_attr_cache.size() || !mo_attr_cache[lz_idx])
+            {
+                continue;
+            }
+        }
+
+        const s_p8_attr_desc *lp_attr_desc = mo_attr_cache[lz_idx];
+
+        if(lp_attr_desc->me_type == e_p8_attr_type::e_p8_attr_str)
+        {
+            P8_ENSURE_SPACE(lp_dst, lp_buf_end, sizeof(p8_attr_id), lp_hdr->mu_timestamp);
+            memcpy(lp_dst, &li_id, sizeof(p8_attr_id));
+            lp_dst             += sizeof(p8_attr_id);
+            lz_attrs_written   += sizeof(p8_attr_id);
+
+            const char *lp_str  = ip_attrs[lz_i].mp_str;
+            uint16_t    lu_len  = 0;
+            if(lp_str)
+            {
+                size_t lz_slen = strlen(lp_str);
+                lu_len         = (lz_slen > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_slen);
+            }
+
+            P8_ENSURE_SPACE(lp_dst, lp_buf_end, sizeof(lu_len), lp_hdr->mu_timestamp);
+            memcpy(lp_dst, &lu_len, sizeof(lu_len));
+            lp_dst           += sizeof(lu_len);
+            lz_attrs_written += sizeof(lu_len);
+
+            if(!copy_fragmented(lp_dst, lp_buf_end, lp_str, lu_len, lp_hdr->mu_timestamp, lz_attrs_written))
+            {
+                goto lbl_discard;
+            }
+        }
+        else
+        {
+            size_t lz_needed = sizeof(p8_attr_id) + sizeof(uint64_t);
+            P8_ENSURE_SPACE(lp_dst, lp_buf_end, lz_needed, lp_hdr->mu_timestamp);
+            memcpy(lp_dst, &li_id, sizeof(p8_attr_id));
+            lp_dst += sizeof(p8_attr_id);
+            memcpy(lp_dst, &ip_attrs[lz_i].mu_u64, sizeof(uint64_t));
+            lp_dst           += sizeof(uint64_t);
+            lz_attrs_written += lz_needed;
+        }
+
+        lu_attrs_count++;
     }
 
-    lp_hdr->mu_size = static_cast<uint16_t>(lp_dst - reinterpret_cast<uint8_t *>(lp_hdr));
-    mz_offset       = static_cast<size_t>(lp_dst - mp_buffer);
+    // finalize item header
+    lp_hdr->mu_attrs_count = lu_attrs_count;
+    lp_hdr->mu_size        = static_cast<uint32_t>(sizeof(s_p8_log_item_hdr) + lz_args_written + lz_attrs_written);
 
-lbl_finalize:
-    if(!lb_ret)
+    // update current buffer state
+    mz_buf_used            = static_cast<size_t>(lp_dst - mp_buffer);
+
     {
-        // TODO: IF this is space problem - release buffer and make another loop with new buffer
+        struct s_p8_data_buf_hdr *lp_buf_hdr = reinterpret_cast<struct s_p8_data_buf_hdr *>(mp_buffer);
+        lp_buf_hdr->mu_size                  = static_cast<uint16_t>(mz_buf_used);
+        lp_buf_hdr->mu_stop_time             = lp_hdr->mu_timestamp;
     }
 
-    // TODO: temporal solution - buffer management need to be updated for real arch.
-    //  post-check: if remaining buffer < P8_LOG_MIN_BUFFER_SPACE, return it to pool
-    if(mz_buf_sz - mz_offset < P8_LOG_MIN_BUFFER_SPACE) [[unlikely]]
+    // release accumulated fragment buffers in logical order
+    if(mo_fragments.size() > 0)
+    {
+        mp_core->release_buffers(mo_fragments);
+    }
+
+    // post-check: if remaining buffer < P8_LOG_MIN_BUFFER_SPACE, return it to pool
+    if(mz_buf_max - mz_buf_used < P8_LOG_MIN_BUFFER_SPACE) [[unlikely]]
     {
         mp_core->release_buffer(mp_buffer);
-        mp_buffer = nullptr;
-        mz_offset = 0;
+        mp_buffer   = nullptr;
+        mz_buf_used = 0;
     }
 
     return true;
+
+lbl_discard:
+    // flush_and_acquire_fragment failed — finalize partial item and release
+    lp_hdr->mu_args_size   = static_cast<uint16_t>(lz_args_written);
+    lp_hdr->mu_attrs_count = lu_attrs_count;
+    lp_hdr->mu_size        = static_cast<uint32_t>(sizeof(s_p8_log_item_hdr) + lz_args_written + lz_attrs_written);
+
+    if(mo_fragments.size() > 0)
+    {
+        mp_core->release_buffers(mo_fragments);
+    }
+    mp_buffer   = nullptr;
+    mz_buf_used = 0;
+
+    return false;
 }
 
 extern "C"

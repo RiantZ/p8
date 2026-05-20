@@ -1,8 +1,11 @@
 #include "p8_tls_writer.hpp"
+#include "p8_protocol.h"
 
 #include <cstring>
 #include <functional>
 #include <thread>
+
+#include "kit/time.hpp"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 cp8_tls_writer::cp8_tls_writer()
@@ -12,7 +15,7 @@ cp8_tls_writer::cp8_tls_writer()
     if(mp_core)
     {
         mp_core->addref();
-        mz_buf_sz = mp_core->get_buffer_size();
+        mz_buf_max = mp_core->get_buffer_size();
     }
 }
 
@@ -29,6 +32,73 @@ cp8_tls_writer::~cp8_tls_writer()
         mp_core->release();
         mp_core = nullptr;
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool cp8_tls_writer::flush_and_acquire_fragment(uint64_t iu_timestamp)
+{
+    s_p8_data_buf_hdr *lp_buf_hdr      = reinterpret_cast<s_p8_data_buf_hdr *>(mp_buffer);
+    uint8_t            lu_packet_type  = lp_buf_hdr->mu_packet_type;
+
+    lp_buf_hdr->mu_flags              |= P8_DATA_FLAG_FRAGMENT;
+    lp_buf_hdr->mu_size                = static_cast<uint16_t>(mz_buf_used);
+    lp_buf_hdr->mu_stop_time           = iu_timestamp;
+
+    mo_fragments.push_last(mp_buffer);
+
+    mp_buffer = mp_core->acquire_buffer();
+    if(!mp_buffer) [[unlikely]]
+    {
+        return false;
+    }
+
+    lp_buf_hdr                 = reinterpret_cast<s_p8_data_buf_hdr *>(mp_buffer);
+    lp_buf_hdr->mu_packet_type = lu_packet_type;
+    lp_buf_hdr->mu_flags       = 0;
+    lp_buf_hdr->mu_size        = static_cast<uint16_t>(sizeof(s_p8_data_buf_hdr));
+    lp_buf_hdr->mu_thread_id   = mu_thread_id;
+    lp_buf_hdr->mu_start_time  = iu_timestamp;
+    lp_buf_hdr->mu_stop_time   = 0;
+
+    mz_buf_used                = sizeof(s_p8_data_buf_hdr);
+
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool cp8_tls_writer::copy_fragmented(uint8_t   *&io_dst,
+                                     uint8_t   *&io_buf_end,
+                                     const void *ip_src,
+                                     size_t      iz_len,
+                                     uint64_t    iu_timestamp,
+                                     size_t     &oz_written)
+{
+    const uint8_t *lp_src       = static_cast<const uint8_t *>(ip_src);
+    size_t         lz_remaining = iz_len;
+
+    while(lz_remaining > 0)
+    {
+        size_t lz_space = static_cast<size_t>(io_buf_end - io_dst);
+        if(0 == lz_space) [[unlikely]]
+        {
+            mz_buf_used = static_cast<size_t>(io_dst - mp_buffer);
+            if(!flush_and_acquire_fragment(iu_timestamp))
+            {
+                return false;
+            }
+            io_dst     = mp_buffer + mz_buf_used;
+            io_buf_end = mp_buffer + mz_buf_max;
+            lz_space   = static_cast<size_t>(io_buf_end - io_dst);
+        }
+        size_t lz_copy = (lz_remaining < lz_space) ? lz_remaining : lz_space;
+        memcpy(io_dst, lp_src, lz_copy);
+        io_dst       += lz_copy;
+        lp_src       += lz_copy;
+        lz_remaining -= lz_copy;
+        oz_written   += lz_copy;
+    }
+
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
