@@ -31,11 +31,35 @@ protected:
 
     static size_t serialize_utf8_string(uint8_t *op_dst, size_t iz_avail, const char *ip_str);
 
-    cp8_core                           *mp_core   = nullptr;
-    uint8_t                            *mp_buffer = nullptr;
-    size_t                              mz_offset = 0;
-    size_t                              mz_buf_sz = 0;
+    bool copy_fragmented(uint8_t   *&io_dst,
+                         uint8_t   *&io_buf_end,
+                         const void *ip_src,
+                         size_t      iz_len,
+                         uint64_t    iu_timestamp,
+                         size_t     &oz_written);
+
+    cp8_core                           *mp_core     = nullptr;
+    uint8_t                            *mp_buffer   = nullptr;
+    size_t                              mz_buf_used = 0;
+    size_t                              mz_buf_max  = 0;
     std::vector<const s_p8_attr_desc *> mo_attr_cache;
     kit::c_lst<uint8_t *>               mo_fragments { 16 };
     uint32_t                            mu_thread_id = 0;
 };
+
+// NOLINTBEGIN(cppcoreguidelines-macro-usage)
+#define P8_ENSURE_SPACE(dst, buf_end, needed, timestamp)                                                              \
+    do                                                                                                                \
+    {                                                                                                                 \
+        if((dst) + (needed) > (buf_end)) [[unlikely]]                                                                 \
+        {                                                                                                             \
+            mz_buf_used = static_cast<size_t>((dst) - mp_buffer);                                                     \
+            if(!flush_and_acquire_fragment((timestamp)))                                                              \
+            {                                                                                                         \
+                goto lbl_discard;                                                                                     \
+            }                                                                                                         \
+            (dst)     = mp_buffer + mz_buf_used;                                                                      \
+            (buf_end) = mp_buffer + mz_buf_max;                                                                       \
+        }                                                                                                             \
+    } while(0)
+// NOLINTEND(cppcoreguidelines-macro-usage)

@@ -115,7 +115,7 @@ extern "C"
         uint16_t mu_attrs_count;  // number of serialized attributes
         uint8_t  mu_padding_size; // log item data is alligned in 8 bytes, the value is padding length in bytes
         uint8_t  mu_flags;        // todo
-        //* Serialized Variable agruments [int32][int64][double][16b length + string data] ...
+        //* Serialized Variable agruments [int32][int64][double][length in bytes (16b) + string data] ...
         //* Serialized attributes [p8_attr_id + data][...]
         //* padding to aling size on 8 bytes boundary
     };

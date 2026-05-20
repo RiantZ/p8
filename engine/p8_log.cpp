@@ -411,7 +411,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     // buffer availability check — reuse current buffer when possible
     if(mp_buffer) [[likely]]
     {
-        if((mz_buf_sz - mz_offset) < (P8_LOG_MIN_BUFFER_SPACE + sizeof(s_p8_log_item_hdr))) [[unlikely]]
+        if((mz_buf_max - mz_buf_used) < (P8_LOG_MIN_BUFFER_SPACE + sizeof(s_p8_log_item_hdr))) [[unlikely]]
         {
             mp_core->release_buffer(mp_buffer);
             mp_buffer = nullptr;
@@ -433,7 +433,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         lp_buf_hdr->mu_start_time     = kit::get_hires_ticks();
         lp_buf_hdr->mu_stop_time      = 0;
 
-        mz_offset                     = sizeof(s_p8_data_buf_hdr);
+        mz_buf_used                   = sizeof(s_p8_data_buf_hdr);
     }
 
     // compute hash from file + line
@@ -456,8 +456,8 @@ bool cp8_log::send(enum e_p8_level             ie_level,
 
     // write item header
     {
-        uint8_t *lp_base        = mp_buffer + mz_offset;
-        lp_buf_end              = mp_buffer + mz_buf_sz;
+        uint8_t *lp_base        = mp_buffer + mz_buf_used;
+        lp_buf_end              = mp_buffer + mz_buf_max;
 
         lp_hdr                  = reinterpret_cast<struct s_p8_log_item_hdr *>(lp_base);
         lp_hdr->mu_hash         = lp_desc->mu_hash;
@@ -484,176 +484,62 @@ bool cp8_log::send(enum e_p8_level             ie_level,
             {
             case P8_ARG_TYPE_USTR8:
             case P8_ARG_TYPE_STRA:
-            {
-                const char *lp_str = va_arg(io_args, const char *);
-                uint16_t    lu_len = 0;
-                if(lp_str)
-                {
-                    size_t lz_slen = strlen(lp_str);
-                    lu_len         = (lz_slen > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_slen);
-                }
-
-                if(lp_dst + sizeof(lu_len) > lp_buf_end) [[unlikely]]
-                {
-                    mz_offset = static_cast<size_t>(lp_dst - mp_buffer);
-                    if(!flush_and_acquire_fragment(lp_hdr->mu_timestamp))
-                    {
-                        goto lbl_discard;
-                    }
-                    lp_dst     = mp_buffer + mz_offset;
-                    lp_buf_end = mp_buffer + mz_buf_sz;
-                }
-                memcpy(lp_dst, &lu_len, sizeof(lu_len));
-                lp_dst          += sizeof(lu_len);
-                lz_args_written += sizeof(lu_len);
-
-                {
-                    const uint8_t *lp_src       = reinterpret_cast<const uint8_t *>(lp_str);
-                    size_t         lz_remaining = lu_len;
-                    while(lz_remaining > 0)
-                    {
-                        size_t lz_space = static_cast<size_t>(lp_buf_end - lp_dst);
-                        if(0 == lz_space) [[unlikely]]
-                        {
-                            mz_offset = static_cast<size_t>(lp_dst - mp_buffer);
-                            if(!flush_and_acquire_fragment(lp_hdr->mu_timestamp))
-                            {
-                                goto lbl_discard;
-                            }
-                            lp_dst     = mp_buffer + mz_offset;
-                            lp_buf_end = mp_buffer + mz_buf_sz;
-                            lz_space   = static_cast<size_t>(lp_buf_end - lp_dst);
-                        }
-                        size_t lz_copy = (lz_remaining < lz_space) ? lz_remaining : lz_space;
-                        memcpy(lp_dst, lp_src, lz_copy);
-                        lp_dst          += lz_copy;
-                        lp_src          += lz_copy;
-                        lz_remaining    -= lz_copy;
-                        lz_args_written += lz_copy;
-                    }
-                }
-                break;
-            }
             case P8_ARG_TYPE_USTR16:
-            {
-                const uint16_t *lp_str = va_arg(io_args, const uint16_t *);
-                uint16_t        lu_len = 0;
-                if(lp_str)
-                {
-                    size_t lz_chars = 0;
-                    while(lp_str[lz_chars])
-                    {
-                        lz_chars++;
-                    }
-                    size_t lz_bytes = lz_chars * sizeof(uint16_t);
-                    lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
-                }
-
-                if(lp_dst + sizeof(lu_len) > lp_buf_end) [[unlikely]]
-                {
-                    mz_offset = static_cast<size_t>(lp_dst - mp_buffer);
-                    if(!flush_and_acquire_fragment(lp_hdr->mu_timestamp))
-                    {
-                        goto lbl_discard;
-                    }
-                    lp_dst     = mp_buffer + mz_offset;
-                    lp_buf_end = mp_buffer + mz_buf_sz;
-                }
-                memcpy(lp_dst, &lu_len, sizeof(lu_len));
-                lp_dst          += sizeof(lu_len);
-                lz_args_written += sizeof(lu_len);
-
-                {
-                    const uint8_t *lp_src       = reinterpret_cast<const uint8_t *>(lp_str);
-                    size_t         lz_remaining = lu_len;
-                    while(lz_remaining > 0)
-                    {
-                        size_t lz_space = static_cast<size_t>(lp_buf_end - lp_dst);
-                        if(0 == lz_space) [[unlikely]]
-                        {
-                            mz_offset = static_cast<size_t>(lp_dst - mp_buffer);
-                            if(!flush_and_acquire_fragment(lp_hdr->mu_timestamp))
-                            {
-                                goto lbl_discard;
-                            }
-                            lp_dst     = mp_buffer + mz_offset;
-                            lp_buf_end = mp_buffer + mz_buf_sz;
-                            lz_space   = static_cast<size_t>(lp_buf_end - lp_dst);
-                        }
-                        size_t lz_copy = (lz_remaining < lz_space) ? lz_remaining : lz_space;
-                        memcpy(lp_dst, lp_src, lz_copy);
-                        lp_dst          += lz_copy;
-                        lp_src          += lz_copy;
-                        lz_remaining    -= lz_copy;
-                        lz_args_written += lz_copy;
-                    }
-                }
-                break;
-            }
             case P8_ARG_TYPE_USTR32:
             {
-                const wchar_t *lp_str = va_arg(io_args, const wchar_t *);
-                uint16_t       lu_len = 0;
-                if(lp_str)
+                const void *lp_str = nullptr;
+                uint16_t    lu_len = 0;
+
+                if(P8_ARG_TYPE_USTR16 == lp_arg->mu_type)
                 {
-                    size_t lz_bytes = wcslen(lp_str) * sizeof(wchar_t);
-                    lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
+                    const uint16_t *lp_u16 = va_arg(io_args, const uint16_t *);
+                    lp_str                 = lp_u16;
+                    if(lp_u16)
+                    {
+                        size_t lz_chars = 0;
+                        while(lp_u16[lz_chars])
+                        {
+                            lz_chars++;
+                        }
+                        size_t lz_bytes = lz_chars * sizeof(uint16_t);
+                        lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
+                    }
+                }
+                else if(P8_ARG_TYPE_USTR32 == lp_arg->mu_type)
+                {
+                    const wchar_t *lp_w = va_arg(io_args, const wchar_t *);
+                    lp_str              = lp_w;
+                    if(lp_w)
+                    {
+                        size_t lz_bytes = wcslen(lp_w) * sizeof(wchar_t);
+                        lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
+                    }
+                }
+                else
+                {
+                    const char *lp_c = va_arg(io_args, const char *);
+                    lp_str           = lp_c;
+                    if(lp_c)
+                    {
+                        size_t lz_slen = strlen(lp_c);
+                        lu_len         = (lz_slen > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_slen);
+                    }
                 }
 
-                if(lp_dst + sizeof(lu_len) > lp_buf_end) [[unlikely]]
-                {
-                    mz_offset = static_cast<size_t>(lp_dst - mp_buffer);
-                    if(!flush_and_acquire_fragment(lp_hdr->mu_timestamp))
-                    {
-                        goto lbl_discard;
-                    }
-                    lp_dst     = mp_buffer + mz_offset;
-                    lp_buf_end = mp_buffer + mz_buf_sz;
-                }
+                P8_ENSURE_SPACE(lp_dst, lp_buf_end, sizeof(lu_len), lp_hdr->mu_timestamp);
                 memcpy(lp_dst, &lu_len, sizeof(lu_len));
                 lp_dst          += sizeof(lu_len);
                 lz_args_written += sizeof(lu_len);
 
+                if(!copy_fragmented(lp_dst, lp_buf_end, lp_str, lu_len, lp_hdr->mu_timestamp, lz_args_written))
                 {
-                    const uint8_t *lp_src       = reinterpret_cast<const uint8_t *>(lp_str);
-                    size_t         lz_remaining = lu_len;
-                    while(lz_remaining > 0)
-                    {
-                        size_t lz_space = static_cast<size_t>(lp_buf_end - lp_dst);
-                        if(0 == lz_space) [[unlikely]]
-                        {
-                            mz_offset = static_cast<size_t>(lp_dst - mp_buffer);
-                            if(!flush_and_acquire_fragment(lp_hdr->mu_timestamp))
-                            {
-                                goto lbl_discard;
-                            }
-                            lp_dst     = mp_buffer + mz_offset;
-                            lp_buf_end = mp_buffer + mz_buf_sz;
-                            lz_space   = static_cast<size_t>(lp_buf_end - lp_dst);
-                        }
-                        size_t lz_copy = (lz_remaining < lz_space) ? lz_remaining : lz_space;
-                        memcpy(lp_dst, lp_src, lz_copy);
-                        lp_dst          += lz_copy;
-                        lp_src          += lz_copy;
-                        lz_remaining    -= lz_copy;
-                        lz_args_written += lz_copy;
-                    }
+                    goto lbl_discard;
                 }
                 break;
             }
             default:
             {
-                // fixed-size argument — move whole to next buffer if doesn't fit
-                if(lp_dst + lp_arg->mu_size > lp_buf_end) [[unlikely]]
-                {
-                    mz_offset = static_cast<size_t>(lp_dst - mp_buffer);
-                    if(!flush_and_acquire_fragment(lp_hdr->mu_timestamp))
-                    {
-                        goto lbl_discard;
-                    }
-                    lp_dst     = mp_buffer + mz_offset;
-                    lp_buf_end = mp_buffer + mz_buf_sz;
-                }
+                P8_ENSURE_SPACE(lp_dst, lp_buf_end, lp_arg->mu_size, lp_hdr->mu_timestamp);
 
 #if defined(GTX32)
                 if(4 == lp_arg->mu_size)
@@ -714,19 +600,9 @@ bool cp8_log::send(enum e_p8_level             ie_level,
 
         const s_p8_attr_desc *lp_attr_desc = mo_attr_cache[lz_idx];
 
-        if(lp_attr_desc->me_type == e_p8_attr_str)
+        if(lp_attr_desc->me_type == e_p8_attr_type::e_p8_attr_str)
         {
-            // string attr: attr_id (move whole) + uint16 len (move whole) + string bytes (fragment)
-            if(lp_dst + sizeof(p8_attr_id) > lp_buf_end) [[unlikely]]
-            {
-                mz_offset = static_cast<size_t>(lp_dst - mp_buffer);
-                if(!flush_and_acquire_fragment(lp_hdr->mu_timestamp))
-                {
-                    goto lbl_discard;
-                }
-                lp_dst     = mp_buffer + mz_offset;
-                lp_buf_end = mp_buffer + mz_buf_sz;
-            }
+            P8_ENSURE_SPACE(lp_dst, lp_buf_end, sizeof(p8_attr_id), lp_hdr->mu_timestamp);
             memcpy(lp_dst, &li_id, sizeof(p8_attr_id));
             lp_dst             += sizeof(p8_attr_id);
             lz_attrs_written   += sizeof(p8_attr_id);
@@ -739,60 +615,20 @@ bool cp8_log::send(enum e_p8_level             ie_level,
                 lu_len         = (lz_slen > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_slen);
             }
 
-            if(lp_dst + sizeof(lu_len) > lp_buf_end) [[unlikely]]
-            {
-                mz_offset = static_cast<size_t>(lp_dst - mp_buffer);
-                if(!flush_and_acquire_fragment(lp_hdr->mu_timestamp))
-                {
-                    goto lbl_discard;
-                }
-                lp_dst     = mp_buffer + mz_offset;
-                lp_buf_end = mp_buffer + mz_buf_sz;
-            }
+            P8_ENSURE_SPACE(lp_dst, lp_buf_end, sizeof(lu_len), lp_hdr->mu_timestamp);
             memcpy(lp_dst, &lu_len, sizeof(lu_len));
             lp_dst           += sizeof(lu_len);
             lz_attrs_written += sizeof(lu_len);
 
+            if(!copy_fragmented(lp_dst, lp_buf_end, lp_str, lu_len, lp_hdr->mu_timestamp, lz_attrs_written))
             {
-                const uint8_t *lp_src       = reinterpret_cast<const uint8_t *>(lp_str);
-                size_t         lz_remaining = lu_len;
-                while(lz_remaining > 0)
-                {
-                    size_t lz_space = static_cast<size_t>(lp_buf_end - lp_dst);
-                    if(0 == lz_space) [[unlikely]]
-                    {
-                        mz_offset = static_cast<size_t>(lp_dst - mp_buffer);
-                        if(!flush_and_acquire_fragment(lp_hdr->mu_timestamp))
-                        {
-                            goto lbl_discard;
-                        }
-                        lp_dst     = mp_buffer + mz_offset;
-                        lp_buf_end = mp_buffer + mz_buf_sz;
-                        lz_space   = static_cast<size_t>(lp_buf_end - lp_dst);
-                    }
-                    size_t lz_copy = (lz_remaining < lz_space) ? lz_remaining : lz_space;
-                    memcpy(lp_dst, lp_src, lz_copy);
-                    lp_dst           += lz_copy;
-                    lp_src           += lz_copy;
-                    lz_remaining     -= lz_copy;
-                    lz_attrs_written += lz_copy;
-                }
+                goto lbl_discard;
             }
         }
         else
         {
-            // non-string attr: attr_id + uint64_t (move whole)
             size_t lz_needed = sizeof(p8_attr_id) + sizeof(uint64_t);
-            if(lp_dst + lz_needed > lp_buf_end) [[unlikely]]
-            {
-                mz_offset = static_cast<size_t>(lp_dst - mp_buffer);
-                if(!flush_and_acquire_fragment(lp_hdr->mu_timestamp))
-                {
-                    goto lbl_discard;
-                }
-                lp_dst     = mp_buffer + mz_offset;
-                lp_buf_end = mp_buffer + mz_buf_sz;
-            }
+            P8_ENSURE_SPACE(lp_dst, lp_buf_end, lz_needed, lp_hdr->mu_timestamp);
             memcpy(lp_dst, &li_id, sizeof(p8_attr_id));
             lp_dst += sizeof(p8_attr_id);
             memcpy(lp_dst, &ip_attrs[lz_i].mu_u64, sizeof(uint64_t));
@@ -808,11 +644,11 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     lp_hdr->mu_size        = static_cast<uint32_t>(sizeof(s_p8_log_item_hdr) + lz_args_written + lz_attrs_written);
 
     // update current buffer state
-    mz_offset              = static_cast<size_t>(lp_dst - mp_buffer);
+    mz_buf_used            = static_cast<size_t>(lp_dst - mp_buffer);
 
     {
         struct s_p8_data_buf_hdr *lp_buf_hdr = reinterpret_cast<struct s_p8_data_buf_hdr *>(mp_buffer);
-        lp_buf_hdr->mu_size                  = static_cast<uint16_t>(mz_offset);
+        lp_buf_hdr->mu_size                  = static_cast<uint16_t>(mz_buf_used);
         lp_buf_hdr->mu_stop_time             = lp_hdr->mu_timestamp;
     }
 
@@ -823,11 +659,11 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     }
 
     // post-check: if remaining buffer < P8_LOG_MIN_BUFFER_SPACE, return it to pool
-    if(mz_buf_sz - mz_offset < P8_LOG_MIN_BUFFER_SPACE) [[unlikely]]
+    if(mz_buf_max - mz_buf_used < P8_LOG_MIN_BUFFER_SPACE) [[unlikely]]
     {
         mp_core->release_buffer(mp_buffer);
-        mp_buffer = nullptr;
-        mz_offset = 0;
+        mp_buffer   = nullptr;
+        mz_buf_used = 0;
     }
 
     return true;
@@ -842,8 +678,8 @@ lbl_discard:
     {
         mp_core->release_buffers(mo_fragments);
     }
-    mp_buffer = nullptr;
-    mz_offset = 0;
+    mp_buffer   = nullptr;
+    mz_buf_used = 0;
 
     return false;
 }
