@@ -2,6 +2,7 @@
 #include "p8_config_keys.hpp"
 #include "p8_hash.hpp"
 #include "p8_log.hpp"
+#include "p8_tls_writer.hpp"
 
 #include "kit/endian.hpp"
 #include "kit/shared_mem.hpp"
@@ -325,6 +326,41 @@ void cp8_core::exceptional_flush()
     {
         return;
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::register_writer(cp8_tls_writer *ip_writer)
+{
+    std::lock_guard<kit::c_spin_lock> lo_guard(mo_writers_lock);
+    ip_writer->mp_prev_writer = nullptr;
+    ip_writer->mp_next_writer = mp_writers_head;
+    if(mp_writers_head)
+    {
+        mp_writers_head->mp_prev_writer = ip_writer;
+    }
+    mp_writers_head = ip_writer;
+    ++mz_writers_count;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::unregister_writer(cp8_tls_writer *ip_writer)
+{
+    std::lock_guard<kit::c_spin_lock> lo_guard(mo_writers_lock);
+    if(ip_writer->mp_prev_writer)
+    {
+        ip_writer->mp_prev_writer->mp_next_writer = ip_writer->mp_next_writer;
+    }
+    else
+    {
+        mp_writers_head = ip_writer->mp_next_writer;
+    }
+    if(ip_writer->mp_next_writer)
+    {
+        ip_writer->mp_next_writer->mp_prev_writer = ip_writer->mp_prev_writer;
+    }
+    ip_writer->mp_next_writer = nullptr;
+    ip_writer->mp_prev_writer = nullptr;
+    --mz_writers_count;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -852,6 +888,31 @@ void p8_test_clear_captured_buffers()
         std::lock_guard<std::mutex> lo_lock(gp_instance->mo_capture_mutex);
         gp_instance->mo_captured_buffers.clear();
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+size_t cp8_core::get_writer_count()
+{
+    std::lock_guard<kit::c_spin_lock> lo_guard(mo_writers_lock);
+    return mz_writers_count;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+cp8_tls_writer *cp8_core::get_writers_head()
+{
+    return mp_writers_head;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+size_t p8_test_get_writer_count()
+{
+    return gp_instance ? gp_instance->get_writer_count() : 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+cp8_tls_writer *p8_test_get_writers_head()
+{
+    return gp_instance ? gp_instance->get_writers_head() : nullptr;
 }
 
 #endif // P8_TESTING

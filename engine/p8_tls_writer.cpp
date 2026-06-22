@@ -17,6 +17,7 @@ cp8_tls_writer::cp8_tls_writer(kit::c_spin_lock *ip_lock)
     {
         mp_core->addref();
         mz_buf_max = mp_core->get_buffer_size();
+        mp_core->register_writer(this);
     }
 }
 
@@ -26,6 +27,7 @@ cp8_tls_writer::~cp8_tls_writer()
     if(mp_core)
     {
         core_push();
+        mp_core->unregister_writer(this);
         mp_core->release();
         mp_core = nullptr;
     }

@@ -63,6 +63,10 @@ protected:
     // from std::hash<std::thread::id>
     uint32_t          mu_thread_id = 0;
     kit::c_spin_lock *mp_lock      = nullptr;
+
+    cp8_tls_writer *mp_next_writer = nullptr;
+    cp8_tls_writer *mp_prev_writer = nullptr;
+    friend class cp8_core;
 };
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
