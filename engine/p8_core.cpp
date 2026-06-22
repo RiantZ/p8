@@ -245,7 +245,7 @@ bool cp8_core::init_buffer_pool(const char *ip_max_memory_size, const char *ip_i
         return false;
     }
 
-    mp_data_pool = new(std::nothrow) cp8_buffer_pool(mz_buffer_size, mp_memory_budget);
+    mp_data_pool = new(std::nothrow) cp8_buffer_pool(mz_data_buffer_size, mp_memory_budget);
     if(!mp_data_pool)
     {
         std::fprintf(stderr, "cp8_core::init_buffer_pool: data pool allocation failed\n");
@@ -253,7 +253,7 @@ bool cp8_core::init_buffer_pool(const char *ip_max_memory_size, const char *ip_i
         return false;
     }
 
-    mp_data_pool->init(lz_initial_memory_size / mz_buffer_size);
+    mp_data_pool->init(lz_initial_memory_size / mz_data_buffer_size);
 
     return true;
 }
@@ -462,7 +462,7 @@ void cp8_core::release_buffer(uint8_t *ip_buffer)
     if(mb_capture_enabled)
     {
         std::lock_guard<std::mutex> lo_lock(mo_capture_mutex);
-        mo_captured_buffers.emplace_back(ip_buffer, ip_buffer + mz_buffer_size);
+        mo_captured_buffers.emplace_back(ip_buffer, ip_buffer + mz_data_buffer_size);
     }
 #endif
 
@@ -489,7 +489,7 @@ void cp8_core::release_buffers(kit::c_lst<uint8_t *> &io_buffers)
             if(mb_capture_enabled)
             {
                 std::lock_guard<std::mutex> lo_lock(mo_capture_mutex);
-                mo_captured_buffers.emplace_back(ip_buf, ip_buf + mz_buffer_size);
+                mo_captured_buffers.emplace_back(ip_buf, ip_buf + mz_data_buffer_size);
             }
 #endif
             mp_data_pool->recycle(ip_buf);
@@ -499,7 +499,7 @@ void cp8_core::release_buffers(kit::c_lst<uint8_t *> &io_buffers)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 size_t cp8_core::get_buffer_size()
 {
-    return mz_buffer_size;
+    return mz_data_buffer_size;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -757,7 +757,7 @@ uint32_t p8_test_get_instance_count()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 size_t p8_test_get_buffer_size()
 {
-    return gp_instance ? gp_instance->mz_buffer_size : 0;
+    return gp_instance ? gp_instance->mz_data_buffer_size : 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -787,7 +787,7 @@ size_t p8_test_get_all_buffers_count()
     {
         return 0;
     }
-    return gp_instance->mp_data_pool->get_total_allocated() / gp_instance->mz_buffer_size;
+    return gp_instance->mp_data_pool->get_total_allocated() / gp_instance->mz_data_buffer_size;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

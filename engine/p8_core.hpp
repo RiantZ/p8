@@ -88,18 +88,15 @@ private:
     bool                  mb_initialized = false;
     std::atomic<uint32_t> mu_ref_count { 1 };
 
-    struct s_p8_hdr mo_hdr             = {};
+    struct s_p8_hdr mo_hdr = {};
+
+    // shared memory budget => memory limiter, to avoid memory allocation without control under the pressure
+    std::shared_ptr<cp8_memory_budget> mp_memory_budget;
 
     // buffer pool geometry (kept on the core for backwards-compatible API)
-    const static size_t mz_buffer_size = 8192;
-
-    // shared memory budget + data buffer pool (built lazily in init_buffer_pool).
-    // budget is shared_ptr because future revisions will pin a second pool
-    // (mini-pool, see doc/serializer_optimization.md §5.3) to the same budget;
-    // shared ownership lifts the destruction-order constraint between pools
-    // and the budget. The pool itself is owned exclusively by cp8_core.
-    std::shared_ptr<cp8_memory_budget> mp_memory_budget;
-    cp8_buffer_pool                   *mp_data_pool = nullptr;
+    const static size_t mz_data_buffer_size = 8192;
+    // data memory pool, uses & depends on mp_memory_budget
+    cp8_buffer_pool *mp_data_pool           = nullptr;
 
     // log descriptor registry (global, shared across all TLS cp8_log instances)
     std::map<uint64_t, struct s_p8_log_desc *> mo_log_descs;

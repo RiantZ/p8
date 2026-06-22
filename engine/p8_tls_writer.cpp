@@ -8,9 +8,10 @@
 #include "kit/time.hpp"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-cp8_tls_writer::cp8_tls_writer()
+cp8_tls_writer::cp8_tls_writer(kit::c_spin_lock *ip_lock)
     : mp_core(cp8_core::get_global_core(P8_CORE_ACQUIRE_TIMEOUT_MS))
     , mu_thread_id(static_cast<uint32_t>(std::hash<std::thread::id> {}(std::this_thread::get_id())))
+    , mp_lock(ip_lock)
 {
     if(mp_core)
     {
@@ -24,18 +25,14 @@ cp8_tls_writer::~cp8_tls_writer()
 {
     if(mp_core)
     {
-        if(mp_buffer)
-        {
-            mp_core->release_buffer(mp_buffer);
-            mp_buffer = nullptr;
-        }
+        core_push();
         mp_core->release();
         mp_core = nullptr;
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool cp8_tls_writer::flush_and_acquire_fragment(uint64_t iu_timestamp)
+bool cp8_tls_writer::rotate_fragment_buffer(uint64_t iu_timestamp)
 {
     s_p8_data_buf_hdr *lp_buf_hdr      = reinterpret_cast<s_p8_data_buf_hdr *>(mp_buffer);
     uint8_t            lu_packet_type  = lp_buf_hdr->mu_packet_type;
@@ -82,7 +79,8 @@ bool cp8_tls_writer::copy_fragmented(uint8_t   *&io_dst,
         if(0 == lz_space) [[unlikely]]
         {
             mz_buf_used = static_cast<size_t>(io_dst - mp_buffer);
-            if(!flush_and_acquire_fragment(iu_timestamp))
+            // push current buffer to fragments list and pull new buffer for data
+            if(!rotate_fragment_buffer(iu_timestamp))
             {
                 return false;
             }
@@ -99,6 +97,25 @@ bool cp8_tls_writer::copy_fragmented(uint8_t   *&io_dst,
     }
 
     return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_tls_writer::core_push()
+{
+    std::lock_guard<kit::c_spin_lock> lo_guard(*mp_lock);
+
+    if(mo_fragments.size() > 0)
+    {
+        // TODO: replace release_xxx by function to consume data
+        mp_core->release_buffers(mo_fragments);
+    }
+
+    if(mp_buffer)
+    {
+        // TODO: replace release_xxx by function to consume data
+        mp_core->release_buffer(mp_buffer);
+        mp_buffer = nullptr;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

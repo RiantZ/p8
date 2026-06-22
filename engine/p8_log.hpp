@@ -22,6 +22,7 @@ struct s_p8_log_desc
 class cp8_log : public cp8_tls_writer
 {
 public:
+    cp8_log();
     void            set_verbosity(p_p8_module ip_module, enum e_p8_level ie_verbosity);
     enum e_p8_level get_verbosity(p_p8_module ip_module);
 
