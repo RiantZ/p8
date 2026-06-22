@@ -513,6 +513,17 @@ send), либо снова промахнётся. В обоих случаях 
 send) на try_lock проходит без contention'а — pull-flush спокойно
 ротирует его буфер.
 
+##### 4.7.1.6 Lock ordering
+
+Если оба lock'а берутся, `mo_writers_lock` **всегда первый**:
+
+    mo_writers_lock  →  writer->mo_lock
+
+Обратный порядок **невалиден**. Pull-flush и graceful shutdown оба
+следуют этому порядку (берут `mo_writers_lock` на iterate, затем
+`mo_lock` каждого writer'а внутри). Exceptional flush не берёт ни
+одного lock'а.
+
 #### 4.7.2 Структура реестра
 
 Честный intrusive doubly-linked list. Поля `mp_next_writer`,
@@ -526,6 +537,11 @@ class cp8_tls_writer
     // ...
     cp8_tls_writer *mp_next_writer = nullptr;    // NEW: intrusive registry list
     cp8_tls_writer *mp_prev_writer = nullptr;
+
+    // Drain-логика без взятия lock'а; caller гарантирует что mp_lock удерживается.
+    // Используется pull-flush'ем (после try_lock), graceful shutdown'ом (после lock),
+    // и self-locking wrapper'ом core_push().
+    void drain_current_buffers();
 };
 
 class cp8_core
@@ -534,6 +550,28 @@ class cp8_core
     cp8_tls_writer  *mp_writers_head = nullptr;  // NEW: head of intrusive list
     kit::c_spin_lock mo_writers_lock;            // NEW: защищает топологию списка
 };
+
+// Self-locking wrapper — вызывается только из деструктора cp8_tls_writer.
+// Pull-flush и graceful shutdown вызывают drain_current_buffers() напрямую,
+// держа mp_lock самостоятельно (через try_lock / lock соответственно).
+void cp8_tls_writer::core_push()
+{
+    std::lock_guard<kit::c_spin_lock> lo_guard(*mp_lock);
+    drain_current_buffers();
+}
+
+void cp8_tls_writer::drain_current_buffers()
+{
+    if(mo_fragments.size() > 0)
+    {
+        mp_core->submit_chain(mo_fragments);
+    }
+    if(mp_buffer)
+    {
+        mp_core->submit_chain(mp_buffer, mz_buf_used);
+        mp_buffer = nullptr;
+    }
+}
 
 void cp8_core::register_writer(cp8_tls_writer *ip_w)
 {
@@ -567,9 +605,23 @@ void cp8_core::unregister_writer(cp8_tls_writer *ip_w)
 }
 ```
 
-Регистрация вызывается из конструктора `cp8_tls_writer`, отписка — из
-деструктора (после flush'а оставшегося буфера обычным push-путём через
-`submit_chain`).
+`core_push()` — self-locking wrapper, используется **только** из деструктора
+`cp8_tls_writer`. Все внешние потребители вызывают `drain_current_buffers()`
+напрямую, удерживая `mp_lock` самостоятельно:
+
+| Caller | Как вызывает drain |
+|---|---|
+| Pull-flush | `writer->mp_lock->try_lock()` → `drain_current_buffers()` → `writer->mp_lock->unlock()` |
+| Graceful shutdown | `writer->mp_lock->lock()` → `drain_current_buffers()` → `writer->mp_lock->unlock()` |
+| Деструктор | `core_push()` (self-locking wrapper) |
+
+Это устраняет double-lock hazard: pull-flush берёт `try_lock` на `mp_lock`,
+а затем вызывает `drain_current_buffers()` которая lock **не берёт**.
+
+Регистрация вызывается из конструктора `cp8_tls_writer` **при условии
+`mp_core != nullptr`** (core не инициализирован — writer работает как no-op),
+отписка — из деструктора (аналогично под guard'ом, после flush'а оставшегося
+буфера обычным push-путём через `submit_chain`).
 
 #### 4.7.3 Стоимость
 
@@ -1406,14 +1458,22 @@ Mini-pool никогда не вырастет значительно больш
   пытаются зарегистрировать descriptor под mutex'ом? Сериализуется через
   существующий mutex; pre-serialization внутри добавляет ~1 μs к
   registration time. Допустимо.
-- **Sharded TLS writer registry** (раздел 4.7): на high-churn нагрузке
-  (тысячи короткоживущих нитей/сек × 3 TLS writer'а на нить) единый
-  `mo_writers_lock` становится точкой контеншена между register/unregister
-  и pull-flush iterate. Митигация — `N` шардов по `thread_id % N` с
-  отдельными intrusive-списками и spin-lock'ами; pull-flush обходит шарды
-  по очереди, между шардами lifecycle-операции проскакивают. Откладывается
-  до профилирования на шаге 11 — для медианного use-case'а (десятки–сотни
-  долгоживущих нитей) единого lock'а достаточно.
+- **Контеншен `mo_writers_lock` при high-churn** (раздел 4.7): на
+  high-churn нагрузке (тысячи короткоживущих нитей/сек × 3 TLS writer'а
+  на нить) единый `mo_writers_lock` становится точкой контеншена между
+  register/unregister и pull-flush iterate. Pull-flush удерживает
+  `mo_writers_lock` на весь обход списка; при 100 нитях × 3 writer'а =
+  300 узлов × ~1 μs на try_lock+drain ≈ **~300 μs**, в течение которых
+  все register/unregister блокированы. Возможные подходы к митигации:
+
+  | Подход | Плюсы | Минусы |
+  |---|---|---|
+  | Sharding по `thread_id % N` с отдельными intrusive-списками и spin-lock'ами | Независимые шарды, register/unregister блокируется только своим шардом | Pull-flush обходит N шардов последовательно, суммарное время drain'а не уменьшается |
+  | Snapshot-iterate: скопировать `mp_writers_head` под lock'ом, итерировать lock-free | register/unregister не блокируются iterate'ом | Нужна защита от use-after-free (epoch-based reclamation / hazard pointers / deferred destruction) |
+  | Двухфазный unregister: mark-as-dead + lazy remove на следующем iterate | unregister O(1) без lock'а, фактическое удаление делает pull-flush | Усложняет iterate, dead writer'ы занимают место до следующего прохода |
+
+  Откладывается до профилирования на шаге 11 — для медианного use-case'а
+  (десятки–сотни долгоживущих нитей) единого lock'а достаточно.
 - **Pull-flush schedule** (раздел 4.7): частота regular pull-flush'а
   (каждые N ms) и поведение при agresivnom drain'е (например, sink идёт
   в idle и просит «дай что есть») — out of scope этого документа. Лимит
