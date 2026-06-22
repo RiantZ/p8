@@ -184,12 +184,9 @@ cp8_core::~cp8_core()
     mo_attr_descs.clear();
     mo_attr_name_map.clear();
 
-    for(uint8_t *lp_buf : mo_all_buffers)
-    {
-        delete[] lp_buf;
-    }
-    mo_all_buffers.clear();
-    mo_free_buffers.clear();
+    delete mp_data_pool;
+    mp_data_pool = nullptr;
+    mp_memory_budget.reset();
 
     gu_instance_count.fetch_sub(1, std::memory_order_relaxed);
 }
@@ -212,43 +209,51 @@ void cp8_core::release()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool cp8_core::init_buffer_pool(const char *ip_max_memory_size, const char *ip_initial_memory_size)
 {
-    mz_total_allocated = 0;
+    size_t lz_max_memory_size     = std::numeric_limits<size_t>::max();
+    size_t lz_initial_memory_size = 1024 * 1024;
 
     if(ip_max_memory_size)
     {
-        if(!parse_size(ip_max_memory_size, mz_max_memory_size))
+        if(!parse_size(ip_max_memory_size, lz_max_memory_size))
         {
-            std::fprintf(stderr, "cp8_core: invalid max_memory_size value\n");
+            std::fprintf(stderr, "cp8_core::init_buffer_pool: invalid max_memory_size value\n");
             return false;
         }
     }
 
     if(ip_initial_memory_size)
     {
-        if(!parse_size(ip_initial_memory_size, mz_initial_memory_size))
+        if(!parse_size(ip_initial_memory_size, lz_initial_memory_size))
         {
-            std::fprintf(stderr, "cp8_core: invalid initial_memory_size value\n");
+            std::fprintf(stderr, "cp8_core::init_buffer_pool: invalid initial_memory_size value\n");
             return false;
         }
     }
 
-    if(mz_initial_memory_size > mz_max_memory_size)
+    if(lz_initial_memory_size > lz_max_memory_size)
     {
-        mz_initial_memory_size = mz_max_memory_size;
+        lz_initial_memory_size = lz_max_memory_size;
     }
 
-    for(size_t lz_i = 0; lz_i < (mz_initial_memory_size / mz_buffer_size); ++lz_i)
+    try
     {
-        uint8_t *lp_buf = new(std::nothrow) uint8_t[mz_buffer_size];
-        if(!lp_buf)
-        {
-            std::fprintf(stderr, "cp8_core: memory allocation failed\n");
-            break;
-        }
-        mo_free_buffers.push_last(lp_buf);
-        mo_all_buffers.push_last(lp_buf);
-        mz_total_allocated += mz_buffer_size;
+        mp_memory_budget = std::make_shared<cp8_memory_budget>(lz_max_memory_size);
     }
+    catch(const std::bad_alloc &)
+    {
+        std::fprintf(stderr, "cp8_core::init_buffer_pool: budget allocation failed\n");
+        return false;
+    }
+
+    mp_data_pool = new(std::nothrow) cp8_buffer_pool(mz_buffer_size, mp_memory_budget);
+    if(!mp_data_pool)
+    {
+        std::fprintf(stderr, "cp8_core::init_buffer_pool: data pool allocation failed\n");
+        mp_memory_budget.reset();
+        return false;
+    }
+
+    mp_data_pool->init(lz_initial_memory_size / mz_buffer_size);
 
     return true;
 }
@@ -316,22 +321,40 @@ bool cp8_core::get_initialized() const
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void cp8_core::exceptional_flush()
 {
+    if(!mb_initialized)
+    {
+        return;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool cp8_core::register_current_thread(const char *)
 {
+    if(!mb_initialized)
+    {
+        return false;
+    }
+
     return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void cp8_core::unregister_current_thread()
 {
+    if(!mb_initialized)
+    {
+        return;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 p8_attr_id cp8_core::attr_register(const char *ip_name, enum e_p8_attr_type ie_type)
 {
+    if(!mb_initialized)
+    {
+        return P8_ATTR_ERROR_NOT_INITIALIZED;
+    }
+
     if(!ip_name || ip_name[0] == '\0')
     {
         return P8_ATTR_ERROR_INVALID_NAME;
@@ -375,6 +398,11 @@ p8_attr_id cp8_core::attr_register(const char *ip_name, enum e_p8_attr_type ie_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 p8_attr_id cp8_core::attr_get(const char *ip_name) const
 {
+    if(!mb_initialized)
+    {
+        return P8_ATTR_ERROR_NOT_INITIALIZED;
+    }
+
     if(!ip_name || ip_name[0] == '\0')
     {
         return P8_ATTR_ERROR_NOT_FOUND;
@@ -414,66 +442,58 @@ void cp8_core::sync_attr_cache(std::vector<const s_p8_attr_desc *> &io_cache)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 uint8_t *cp8_core::acquire_buffer()
 {
-    std::lock_guard<std::mutex> lo_lock(mo_pool_mutex);
-
-    if(mo_free_buffers.size() > 0)
+    if(!mb_initialized)
     {
-        return mo_free_buffers.pull_first();
+        return nullptr;
     }
 
-    // on-demand allocation
-    if(mz_total_allocated + mz_buffer_size <= mz_max_memory_size)
-    {
-        uint8_t *lp_buf = new(std::nothrow) uint8_t[mz_buffer_size];
-        if(lp_buf)
-        {
-            mo_all_buffers.push_last(lp_buf);
-            mz_total_allocated += mz_buffer_size;
-            return lp_buf;
-        }
-    }
-
-    return nullptr;
+    return mp_data_pool->acquire();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void cp8_core::release_buffer(uint8_t *ip_buffer)
 {
-    if(!ip_buffer)
+    if(!ip_buffer || !mb_initialized)
     {
         return;
     }
-    std::lock_guard<std::mutex> lo_lock(mo_pool_mutex);
+
 #ifdef P8_TESTING
     if(mb_capture_enabled)
     {
+        std::lock_guard<std::mutex> lo_lock(mo_capture_mutex);
         mo_captured_buffers.emplace_back(ip_buffer, ip_buffer + mz_buffer_size);
     }
 #endif
-    mo_free_buffers.push_last(ip_buffer);
+
+    mp_data_pool->recycle(ip_buffer);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void cp8_core::release_buffers(kit::c_lst<uint8_t *> &io_buffers)
 {
+    if(!mb_initialized)
+    {
+        return;
+    }
+
     if(0 == io_buffers.size())
     {
         return;
     }
 
-    std::lock_guard<std::mutex> lo_lock(mo_pool_mutex);
-
-    while(io_buffers.size() > 0)
-    {
-        uint8_t *lp_buf = io_buffers.pull_first();
-#ifdef P8_TESTING
-        if(mb_capture_enabled)
+    io_buffers.clear(
+        [this](uint8_t *ip_buf)
         {
-            mo_captured_buffers.emplace_back(lp_buf, lp_buf + mz_buffer_size);
-        }
+#ifdef P8_TESTING
+            if(mb_capture_enabled)
+            {
+                std::lock_guard<std::mutex> lo_lock(mo_capture_mutex);
+                mo_captured_buffers.emplace_back(ip_buf, ip_buf + mz_buffer_size);
+            }
 #endif
-        mo_free_buffers.push_last(lp_buf);
-    }
+            mp_data_pool->recycle(ip_buf);
+        });
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -743,19 +763,31 @@ size_t p8_test_get_buffer_size()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 size_t p8_test_get_free_buffers_count()
 {
-    return gp_instance ? gp_instance->mo_free_buffers.size() : 0;
+    if(!gp_instance || !gp_instance->mp_data_pool)
+    {
+        return 0;
+    }
+    return gp_instance->mp_data_pool->get_free_count();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 size_t p8_test_get_total_allocated()
 {
-    return gp_instance ? gp_instance->mz_total_allocated : 0;
+    if(!gp_instance || !gp_instance->mp_data_pool)
+    {
+        return 0;
+    }
+    return gp_instance->mp_data_pool->get_total_allocated();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 size_t p8_test_get_all_buffers_count()
 {
-    return gp_instance ? gp_instance->mo_all_buffers.size() : 0;
+    if(!gp_instance || !gp_instance->mp_data_pool)
+    {
+        return 0;
+    }
+    return gp_instance->mp_data_pool->get_total_allocated() / gp_instance->mz_buffer_size;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -778,7 +810,7 @@ void p8_test_enable_buffer_capture()
 {
     if(gp_instance)
     {
-        std::lock_guard<std::mutex> lo_lock(gp_instance->mo_pool_mutex);
+        std::lock_guard<std::mutex> lo_lock(gp_instance->mo_capture_mutex);
         gp_instance->mo_captured_buffers.clear();
         gp_instance->mb_capture_enabled = true;
     }
@@ -789,7 +821,7 @@ void p8_test_disable_buffer_capture()
 {
     if(gp_instance)
     {
-        std::lock_guard<std::mutex> lo_lock(gp_instance->mo_pool_mutex);
+        std::lock_guard<std::mutex> lo_lock(gp_instance->mo_capture_mutex);
         gp_instance->mb_capture_enabled = false;
     }
 }
@@ -801,7 +833,7 @@ size_t p8_test_get_captured_count()
     {
         return 0;
     }
-    std::lock_guard<std::mutex> lo_lock(gp_instance->mo_pool_mutex);
+    std::lock_guard<std::mutex> lo_lock(gp_instance->mo_capture_mutex);
     return gp_instance->mo_captured_buffers.size();
 }
 
@@ -817,7 +849,7 @@ void p8_test_clear_captured_buffers()
 {
     if(gp_instance)
     {
-        std::lock_guard<std::mutex> lo_lock(gp_instance->mo_pool_mutex);
+        std::lock_guard<std::mutex> lo_lock(gp_instance->mo_capture_mutex);
         gp_instance->mo_captured_buffers.clear();
     }
 }
