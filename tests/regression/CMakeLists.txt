@@ -18,8 +18,10 @@ FetchContent_MakeAvailable(googletest)
 add_executable(${PROJECT_NAME}
     main.cpp
     p8_attr_test.cpp
+    p8_buffer_pool_test.cpp
     p8_config_test.cpp
     p8_core_test.cpp
+    p8_memory_budget_test.cpp
     p8_xxh_test.cpp
     p8_log_format_test.cpp
     p8_log_fragment_test.cpp

@@ -1,6 +1,8 @@
 #pragma once
 
+#include "p8_buffer_pool.hpp"
 #include "p8_client_api.h"
+#include "p8_memory_budget.hpp"
 #include "p8_protocol.h"
 
 #include "kit/list.hpp"
@@ -8,6 +10,7 @@
 #include <atomic>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -67,6 +70,17 @@ public:
     cp8_core(cp8_core &&)                 = delete;
     cp8_core &operator=(cp8_core &&)      = delete;
 
+#ifdef P8_TESTING
+    cp8_buffer_pool *get_data_pool()
+    {
+        return mp_data_pool;
+    }
+    cp8_memory_budget *get_memory_budget()
+    {
+        return mp_memory_budget.get();
+    }
+#endif
+
 private:
     bool init_buffer_pool(const char *ip_max_memory_size, const char *ip_initial_memory_size);
     bool init_header(const struct s_p8_config *ip_config);
@@ -74,18 +88,18 @@ private:
     bool                  mb_initialized = false;
     std::atomic<uint32_t> mu_ref_count { 1 };
 
-    struct s_p8_hdr mo_hdr                     = {};
+    struct s_p8_hdr mo_hdr             = {};
 
-    // config — buffer pool
-    const static size_t mz_buffer_size         = 8192;
-    size_t              mz_max_memory_size     = std::numeric_limits<size_t>::max();
-    size_t              mz_initial_memory_size = 1024 * 1024;
+    // buffer pool geometry (kept on the core for backwards-compatible API)
+    const static size_t mz_buffer_size = 8192;
 
-    // buffer pool state
-    kit::c_lst<uint8_t *> mo_free_buffers;
-    kit::c_lst<uint8_t *> mo_all_buffers;
-    size_t                mz_total_allocated;
-    std::mutex            mo_pool_mutex;
+    // shared memory budget + data buffer pool (built lazily in init_buffer_pool).
+    // budget is shared_ptr because future revisions will pin a second pool
+    // (mini-pool, see doc/serializer_optimization.md §5.3) to the same budget;
+    // shared ownership lifts the destruction-order constraint between pools
+    // and the budget. The pool itself is owned exclusively by cp8_core.
+    std::shared_ptr<cp8_memory_budget> mp_memory_budget;
+    cp8_buffer_pool                   *mp_data_pool = nullptr;
 
     // log descriptor registry (global, shared across all TLS cp8_log instances)
     std::map<uint64_t, struct s_p8_log_desc *> mo_log_descs;
@@ -108,20 +122,20 @@ private:
     friend void                                     p8_test_clear_captured_buffers();
 
     bool                              mb_capture_enabled = false;
+    std::mutex                        mo_capture_mutex;
     std::vector<std::vector<uint8_t>> mo_captured_buffers;
 #endif
 };
 
 #ifdef P8_TESTING
-void     p8_test_reset();
-uint32_t p8_test_get_instance_count();
-size_t   p8_test_get_buffer_size();
-size_t   p8_test_get_free_buffers_count();
-size_t   p8_test_get_total_allocated();
-size_t   p8_test_get_all_buffers_count();
-uint8_t *p8_test_acquire_buffer();
-void     p8_test_release_buffer(uint8_t *ip_buffer);
-
+void                                     p8_test_reset();
+uint32_t                                 p8_test_get_instance_count();
+size_t                                   p8_test_get_buffer_size();
+size_t                                   p8_test_get_free_buffers_count();
+size_t                                   p8_test_get_total_allocated();
+size_t                                   p8_test_get_all_buffers_count();
+uint8_t                                 *p8_test_acquire_buffer();
+void                                     p8_test_release_buffer(uint8_t *ip_buffer);
 void                                     p8_test_enable_buffer_capture();
 void                                     p8_test_disable_buffer_capture();
 size_t                                   p8_test_get_captured_count();

@@ -1,6 +1,10 @@
 add_library(p8 STATIC
             "${P8_API}/p8_client_api.h"
             "${P8_API}/p8_config.h"
+            p8_buffer_pool.hpp
+            p8_buffer_pool.cpp
+            p8_memory_budget.hpp
+            p8_memory_budget.cpp
             p8_core.hpp
             p8_core.cpp
             p8_tls_writer.hpp
