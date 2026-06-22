@@ -346,6 +346,12 @@ size_t cp8_log::parse_format_string(struct s_p8_log_varg *op_args, size_t iz_arg
 static thread_local cp8_log go_tls_log;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+cp8_log::cp8_log()
+    : cp8_tls_writer(&mo_lock)
+{
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void cp8_log::set_verbosity(p_p8_module ip_module, enum e_p8_level ie_verbosity)
 {
     (void)ip_module;
@@ -399,6 +405,8 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     size_t                    lz_attrs_written = 0;
     uint8_t                   lu_attrs_count   = 0;
 
+    // TODO: need to store in s_p8_log_item_hdr
+    // TODO: need to check verbosity and drop if below min verbosity
     (void)ip_module;
 
     std::lock_guard<kit::c_spin_lock> lo_guard(mo_lock);
@@ -413,6 +421,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     {
         if((mz_buf_max - mz_buf_used) < (P8_LOG_MIN_BUFFER_SPACE + sizeof(s_p8_log_item_hdr))) [[unlikely]]
         {
+            // TODO: replace release_xxx by function to consume data
             mp_core->release_buffer(mp_buffer);
             mp_buffer = nullptr;
         }
@@ -655,12 +664,14 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     // release accumulated fragment buffers in logical order
     if(mo_fragments.size() > 0)
     {
+        // TODO: replace release_xxx by function to consume data
         mp_core->release_buffers(mo_fragments);
     }
 
     // post-check: if remaining buffer < P8_LOG_MIN_BUFFER_SPACE, return it to pool
     if(mz_buf_max - mz_buf_used < P8_LOG_MIN_BUFFER_SPACE) [[unlikely]]
     {
+        // TODO: replace release_xxx by function to consume data
         mp_core->release_buffer(mp_buffer);
         mp_buffer   = nullptr;
         mz_buf_used = 0;
@@ -669,13 +680,14 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     return true;
 
 lbl_discard:
-    // flush_and_acquire_fragment failed — finalize partial item and release
+    // rotate_fragment_buffer failed — finalize partial item and release
     lp_hdr->mu_args_size   = static_cast<uint16_t>(lz_args_written);
     lp_hdr->mu_attrs_count = lu_attrs_count;
     lp_hdr->mu_size        = static_cast<uint32_t>(sizeof(s_p8_log_item_hdr) + lz_args_written + lz_attrs_written);
 
     if(mo_fragments.size() > 0)
     {
+        // TODO: replace release_xxx by function to consume data
         mp_core->release_buffers(mo_fragments);
     }
     mp_buffer   = nullptr;

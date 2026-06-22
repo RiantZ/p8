@@ -2,6 +2,7 @@
 #include "p8_config_keys.hpp"
 #include "p8_hash.hpp"
 #include "p8_log.hpp"
+#include "p8_tls_writer.hpp"
 
 #include "kit/endian.hpp"
 #include "kit/shared_mem.hpp"
@@ -245,7 +246,7 @@ bool cp8_core::init_buffer_pool(const char *ip_max_memory_size, const char *ip_i
         return false;
     }
 
-    mp_data_pool = new(std::nothrow) cp8_buffer_pool(mz_buffer_size, mp_memory_budget);
+    mp_data_pool = new(std::nothrow) cp8_buffer_pool(mz_data_buffer_size, mp_memory_budget);
     if(!mp_data_pool)
     {
         std::fprintf(stderr, "cp8_core::init_buffer_pool: data pool allocation failed\n");
@@ -253,7 +254,7 @@ bool cp8_core::init_buffer_pool(const char *ip_max_memory_size, const char *ip_i
         return false;
     }
 
-    mp_data_pool->init(lz_initial_memory_size / mz_buffer_size);
+    mp_data_pool->init(lz_initial_memory_size / mz_data_buffer_size);
 
     return true;
 }
@@ -325,6 +326,41 @@ void cp8_core::exceptional_flush()
     {
         return;
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::register_writer(cp8_tls_writer *ip_writer)
+{
+    std::lock_guard<kit::c_spin_lock> lo_guard(mo_writers_lock);
+    ip_writer->mp_prev_writer = nullptr;
+    ip_writer->mp_next_writer = mp_writers_head;
+    if(mp_writers_head)
+    {
+        mp_writers_head->mp_prev_writer = ip_writer;
+    }
+    mp_writers_head = ip_writer;
+    ++mz_writers_count;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::unregister_writer(cp8_tls_writer *ip_writer)
+{
+    std::lock_guard<kit::c_spin_lock> lo_guard(mo_writers_lock);
+    if(ip_writer->mp_prev_writer)
+    {
+        ip_writer->mp_prev_writer->mp_next_writer = ip_writer->mp_next_writer;
+    }
+    else
+    {
+        mp_writers_head = ip_writer->mp_next_writer;
+    }
+    if(ip_writer->mp_next_writer)
+    {
+        ip_writer->mp_next_writer->mp_prev_writer = ip_writer->mp_prev_writer;
+    }
+    ip_writer->mp_next_writer = nullptr;
+    ip_writer->mp_prev_writer = nullptr;
+    --mz_writers_count;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -462,7 +498,7 @@ void cp8_core::release_buffer(uint8_t *ip_buffer)
     if(mb_capture_enabled)
     {
         std::lock_guard<std::mutex> lo_lock(mo_capture_mutex);
-        mo_captured_buffers.emplace_back(ip_buffer, ip_buffer + mz_buffer_size);
+        mo_captured_buffers.emplace_back(ip_buffer, ip_buffer + mz_data_buffer_size);
     }
 #endif
 
@@ -489,7 +525,7 @@ void cp8_core::release_buffers(kit::c_lst<uint8_t *> &io_buffers)
             if(mb_capture_enabled)
             {
                 std::lock_guard<std::mutex> lo_lock(mo_capture_mutex);
-                mo_captured_buffers.emplace_back(ip_buf, ip_buf + mz_buffer_size);
+                mo_captured_buffers.emplace_back(ip_buf, ip_buf + mz_data_buffer_size);
             }
 #endif
             mp_data_pool->recycle(ip_buf);
@@ -499,7 +535,7 @@ void cp8_core::release_buffers(kit::c_lst<uint8_t *> &io_buffers)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 size_t cp8_core::get_buffer_size()
 {
-    return mz_buffer_size;
+    return mz_data_buffer_size;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -757,7 +793,7 @@ uint32_t p8_test_get_instance_count()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 size_t p8_test_get_buffer_size()
 {
-    return gp_instance ? gp_instance->mz_buffer_size : 0;
+    return gp_instance ? gp_instance->mz_data_buffer_size : 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -787,7 +823,7 @@ size_t p8_test_get_all_buffers_count()
     {
         return 0;
     }
-    return gp_instance->mp_data_pool->get_total_allocated() / gp_instance->mz_buffer_size;
+    return gp_instance->mp_data_pool->get_total_allocated() / gp_instance->mz_data_buffer_size;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -852,6 +888,31 @@ void p8_test_clear_captured_buffers()
         std::lock_guard<std::mutex> lo_lock(gp_instance->mo_capture_mutex);
         gp_instance->mo_captured_buffers.clear();
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+size_t cp8_core::get_writer_count()
+{
+    std::lock_guard<kit::c_spin_lock> lo_guard(mo_writers_lock);
+    return mz_writers_count;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+cp8_tls_writer *cp8_core::get_writers_head()
+{
+    return mp_writers_head;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+size_t p8_test_get_writer_count()
+{
+    return gp_instance ? gp_instance->get_writer_count() : 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+cp8_tls_writer *p8_test_get_writers_head()
+{
+    return gp_instance ? gp_instance->get_writers_head() : nullptr;
 }
 
 #endif // P8_TESTING

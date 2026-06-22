@@ -3,6 +3,7 @@
 #include "p8_core.hpp"
 
 #include <vector>
+#include "kit/spin_lock.hpp"
 
 struct s_p8_attrs_result
 {
@@ -13,7 +14,7 @@ struct s_p8_attrs_result
 class cp8_tls_writer
 {
 public:
-    cp8_tls_writer();
+    cp8_tls_writer(kit::c_spin_lock *ip_lock = nullptr);
     ~cp8_tls_writer();
 
     cp8_tls_writer(const cp8_tls_writer &)            = delete;
@@ -27,7 +28,9 @@ protected:
                                       const struct s_p8_attr_val *ip_attrs,
                                       size_t                      iz_attrs);
 
-    bool flush_and_acquire_fragment(uint64_t iu_timestamp);
+    bool rotate_fragment_buffer(uint64_t iu_timestamp);
+
+    void core_push();
 
     static size_t serialize_utf8_string(uint8_t *op_dst, size_t iz_avail, const char *ip_str);
 
@@ -38,13 +41,32 @@ protected:
                          uint64_t    iu_timestamp,
                          size_t     &oz_written);
 
-    cp8_core                           *mp_core     = nullptr;
-    uint8_t                            *mp_buffer   = nullptr;
-    size_t                              mz_buf_used = 0;
-    size_t                              mz_buf_max  = 0;
+    cp8_core                           *mp_core = nullptr;
     std::vector<const s_p8_attr_desc *> mo_attr_cache;
-    kit::c_lst<uint8_t *>               mo_fragments { 16 };
-    uint32_t                            mu_thread_id = 0;
+    // Buffers that have already been filled while serializing the current
+    // logical record but have not been handed back to the pool yet. Each entry
+    // has been finalized with P8_DATA_FLAG_FRAGMENT set in its header and is
+    // stored in logical (write) order.
+    kit::c_lst<uint8_t *> mo_fragments { 16 };
+
+    // Current tail for mo_fragments, but not yet in the list, writing to it is keep going.
+    uint8_t *mp_buffer             = nullptr;
+
+    // Write cursor inside mp_buffer expressed as a byte offset from its start
+    // (i.e. the total number of bytes already occupied, including the leading
+    // s_p8_data_buf_hdr and any items written by previous calls). The next
+    // write begins at mp_buffer + mz_buf_used.
+    size_t mz_buf_used             = 0;
+    size_t mz_buf_max              = 0;
+
+    // Stable identifier of the owning thread, derived once in the constructor
+    // from std::hash<std::thread::id>
+    uint32_t          mu_thread_id = 0;
+    kit::c_spin_lock *mp_lock      = nullptr;
+
+    cp8_tls_writer *mp_next_writer = nullptr;
+    cp8_tls_writer *mp_prev_writer = nullptr;
+    friend class cp8_core;
 };
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
@@ -54,7 +76,7 @@ protected:
         if((dst) + (needed) > (buf_end)) [[unlikely]]                                                                 \
         {                                                                                                             \
             mz_buf_used = static_cast<size_t>((dst) - mp_buffer);                                                     \
-            if(!flush_and_acquire_fragment((timestamp)))                                                              \
+            if(!rotate_fragment_buffer((timestamp)))                                                                  \
             {                                                                                                         \
                 goto lbl_discard;                                                                                     \
             }                                                                                                         \

@@ -6,6 +6,7 @@
 #include "p8_protocol.h"
 
 #include "kit/list.hpp"
+#include "kit/spin_lock.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -18,6 +19,7 @@
 
 #define P8_CORE_ACQUIRE_TIMEOUT_MS 100
 
+class cp8_tls_writer;
 struct s_p8_log_desc;
 
 struct s_p8_attr_desc
@@ -41,6 +43,10 @@ public:
     static cp8_core *get_global_core(uint32_t iu_timeoutms);
     bool             get_initialized() const;
     void             exceptional_flush();
+
+    // TLS writer registry
+    void register_writer(cp8_tls_writer *ip_writer);
+    void unregister_writer(cp8_tls_writer *ip_writer);
 
     // thread
     bool register_current_thread(const char *ip_name);
@@ -79,6 +85,8 @@ public:
     {
         return mp_memory_budget.get();
     }
+    size_t          get_writer_count();
+    cp8_tls_writer *get_writers_head();
 #endif
 
 private:
@@ -88,18 +96,15 @@ private:
     bool                  mb_initialized = false;
     std::atomic<uint32_t> mu_ref_count { 1 };
 
-    struct s_p8_hdr mo_hdr             = {};
+    struct s_p8_hdr mo_hdr = {};
+
+    // shared memory budget => memory limiter, to avoid memory allocation without control under the pressure
+    std::shared_ptr<cp8_memory_budget> mp_memory_budget;
 
     // buffer pool geometry (kept on the core for backwards-compatible API)
-    const static size_t mz_buffer_size = 8192;
-
-    // shared memory budget + data buffer pool (built lazily in init_buffer_pool).
-    // budget is shared_ptr because future revisions will pin a second pool
-    // (mini-pool, see doc/serializer_optimization.md §5.3) to the same budget;
-    // shared ownership lifts the destruction-order constraint between pools
-    // and the budget. The pool itself is owned exclusively by cp8_core.
-    std::shared_ptr<cp8_memory_budget> mp_memory_budget;
-    cp8_buffer_pool                   *mp_data_pool = nullptr;
+    const static size_t mz_data_buffer_size = 8192;
+    // data memory pool, uses & depends on mp_memory_budget
+    cp8_buffer_pool *mp_data_pool           = nullptr;
 
     // log descriptor registry (global, shared across all TLS cp8_log instances)
     std::map<uint64_t, struct s_p8_log_desc *> mo_log_descs;
@@ -109,6 +114,12 @@ private:
     std::vector<s_p8_attr_desc *>               mo_attr_descs;
     std::unordered_map<std::string, p8_attr_id> mo_attr_name_map;
     mutable std::mutex                          mo_attr_mutex;
+
+    // TLS writer registry: intrusive doubly-linked list of all live writers.
+    // Lock ordering: mo_writers_lock -> writer->mp_lock (never reverse).
+    cp8_tls_writer  *mp_writers_head  = nullptr;
+    size_t           mz_writers_count = 0;
+    kit::c_spin_lock mo_writers_lock;
 
 #ifdef P8_TESTING
     friend size_t                                   p8_test_get_buffer_size();
@@ -120,6 +131,8 @@ private:
     friend size_t                                   p8_test_get_captured_count();
     friend const std::vector<std::vector<uint8_t>> &p8_test_get_captured_buffers();
     friend void                                     p8_test_clear_captured_buffers();
+    friend size_t                                   p8_test_get_writer_count();
+    friend cp8_tls_writer                          *p8_test_get_writers_head();
 
     bool                              mb_capture_enabled = false;
     std::mutex                        mo_capture_mutex;
@@ -141,4 +154,6 @@ void                                     p8_test_disable_buffer_capture();
 size_t                                   p8_test_get_captured_count();
 const std::vector<std::vector<uint8_t>> &p8_test_get_captured_buffers();
 void                                     p8_test_clear_captured_buffers();
+size_t                                   p8_test_get_writer_count();
+cp8_tls_writer                          *p8_test_get_writers_head();
 #endif
