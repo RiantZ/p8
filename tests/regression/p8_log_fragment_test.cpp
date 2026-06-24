@@ -90,7 +90,7 @@ TEST_F(c_log_fragment_test, string_exactly_fills_buffer)
     size_t lz_buf_sz = p8_test_get_buffer_size();
     ASSERT_GT(lz_buf_sz, 0u);
 
-    size_t lz_overhead = sizeof(s_p8_data_buf_hdr) + sizeof(s_p8_log_item_hdr) + sizeof(uint16_t);
+    size_t lz_overhead = sizeof(s_p8_data_buf_hdr) + sizeof(s_p8_log_item_dat) + sizeof(uint16_t);
     size_t lz_str_len  = lz_buf_sz - lz_overhead;
 
     std::string lo_exact(lz_str_len, 'B');

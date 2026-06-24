@@ -397,7 +397,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
                    va_list                     io_args)
 {
     struct s_p8_log_desc     *lp_desc          = nullptr;
-    struct s_p8_log_item_hdr *lp_hdr           = nullptr;
+    struct s_p8_log_item_dat *lp_hdr           = nullptr;
     uint64_t                  lu_hash          = 0;
     uint8_t                  *lp_dst           = nullptr;
     uint8_t                  *lp_buf_end       = nullptr;
@@ -419,7 +419,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     // buffer availability check — reuse current buffer when possible
     if(mp_buffer) [[likely]]
     {
-        if((mz_buf_max - mz_buf_used) < (P8_LOG_MIN_BUFFER_SPACE + sizeof(s_p8_log_item_hdr))) [[unlikely]]
+        if((mz_buf_max - mz_buf_used) < (P8_LOG_MIN_BUFFER_SPACE + sizeof(s_p8_log_item_dat))) [[unlikely]]
         {
             // TODO: replace release_xxx by function to consume data
             mp_core->release_buffer(mp_buffer);
@@ -468,7 +468,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         uint8_t *lp_base        = mp_buffer + mz_buf_used;
         lp_buf_end              = mp_buffer + mz_buf_max;
 
-        lp_hdr                  = reinterpret_cast<struct s_p8_log_item_hdr *>(lp_base);
+        lp_hdr                  = reinterpret_cast<struct s_p8_log_item_dat *>(lp_base);
         lp_hdr->mu_hash         = lp_desc->mu_hash;
         lp_hdr->mu_timestamp    = kit::get_hires_ticks();
         lp_hdr->mu_trace_id     = iu_trace_id;
@@ -479,7 +479,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         lp_hdr->mu_padding_size = 0;
         lp_hdr->mu_flags        = 0;
 
-        lp_dst                  = lp_base + sizeof(struct s_p8_log_item_hdr);
+        lp_dst                  = lp_base + sizeof(struct s_p8_log_item_dat);
     }
 
     // serialize variable arguments
@@ -650,7 +650,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
 
     // finalize item header
     lp_hdr->mu_attrs_count = lu_attrs_count;
-    lp_hdr->mu_size        = static_cast<uint32_t>(sizeof(s_p8_log_item_hdr) + lz_args_written + lz_attrs_written);
+    lp_hdr->mu_size        = static_cast<uint32_t>(sizeof(s_p8_log_item_dat) + lz_args_written + lz_attrs_written);
 
     // update current buffer state
     mz_buf_used            = static_cast<size_t>(lp_dst - mp_buffer);
@@ -683,7 +683,7 @@ lbl_discard:
     // rotate_fragment_buffer failed — finalize partial item and release
     lp_hdr->mu_args_size   = static_cast<uint16_t>(lz_args_written);
     lp_hdr->mu_attrs_count = lu_attrs_count;
-    lp_hdr->mu_size        = static_cast<uint32_t>(sizeof(s_p8_log_item_hdr) + lz_args_written + lz_attrs_written);
+    lp_hdr->mu_size        = static_cast<uint32_t>(sizeof(s_p8_log_item_dat) + lz_args_written + lz_attrs_written);
 
     if(mo_fragments.size() > 0)
     {

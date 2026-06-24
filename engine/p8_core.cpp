@@ -30,11 +30,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static_assert(sizeof(struct s_p8_hdr) % 8 == 0, "s_p8_hdr size must be a multiple of 8 bytes");
 static_assert(sizeof(struct s_p8_data_buf_hdr) % 8 == 0, "s_p8_data_buf_hdr size must be a multiple of 8 bytes");
-static_assert(sizeof(struct s_p8_log_item_hdr) % 8 == 0, "s_p8_log_item_hdr size must be a multiple of 8 bytes");
+static_assert(sizeof(struct s_p8_log_item_dat) % 8 == 0, "s_p8_log_item_hdr size must be a multiple of 8 bytes");
 
 static_assert(alignof(struct s_p8_hdr) >= 8, "s_p8_hdr must have at least 8-byte alignment");
 static_assert(alignof(struct s_p8_data_buf_hdr) >= 8, "s_p8_data_buf_hdr must have at least 8-byte alignment");
-static_assert(alignof(struct s_p8_log_item_hdr) >= 8, "s_p8_log_item_hdr must have at least 8-byte alignment");
+static_assert(alignof(struct s_p8_log_item_dat) >= 8, "s_p8_log_item_hdr must have at least 8-byte alignment");
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // singleton state

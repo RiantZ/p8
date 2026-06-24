@@ -19,7 +19,7 @@
 struct s_log_content_parsed
 {
     s_p8_data_buf_hdr    mo_buf_hdr;
-    s_p8_log_item_hdr    mo_item_hdr;
+    s_p8_log_item_dat    mo_item_hdr;
     std::vector<uint8_t> mo_args_payload;
     std::vector<uint8_t> mo_attrs_payload;
 
@@ -45,12 +45,12 @@ static s_log_content_parsed parse_captured_buffers()
     }
 
     size_t lz_item_off = sizeof(s_p8_data_buf_hdr);
-    if(lo_first.size() >= lz_item_off + sizeof(s_p8_log_item_hdr))
+    if(lo_first.size() >= lz_item_off + sizeof(s_p8_log_item_dat))
     {
-        memcpy(&lo_result.mo_item_hdr, lo_first.data() + lz_item_off, sizeof(s_p8_log_item_hdr));
+        memcpy(&lo_result.mo_item_hdr, lo_first.data() + lz_item_off, sizeof(s_p8_log_item_dat));
     }
 
-    size_t lz_payload_start = lz_item_off + sizeof(s_p8_log_item_hdr);
+    size_t lz_payload_start = lz_item_off + sizeof(s_p8_log_item_dat);
     size_t lz_first_used    = lo_result.mo_buf_hdr.mu_size;
     if(lz_first_used > lo_first.size())
     {
@@ -123,7 +123,7 @@ static uint16_t read_string_len(const std::vector<uint8_t> &io_payload, size_t &
 
 struct s_parsed_item
 {
-    s_p8_log_item_hdr    mo_hdr;
+    s_p8_log_item_dat    mo_hdr;
     std::vector<uint8_t> mo_payload;
 };
 
@@ -159,18 +159,18 @@ static std::vector<s_parsed_item> parse_all_items()
     }
 
     size_t lz_pos = 0;
-    while(lz_pos + sizeof(s_p8_log_item_hdr) <= lo_stream.size())
+    while(lz_pos + sizeof(s_p8_log_item_dat) <= lo_stream.size())
     {
         s_parsed_item lo_item = {};
-        memcpy(&lo_item.mo_hdr, lo_stream.data() + lz_pos, sizeof(s_p8_log_item_hdr));
+        memcpy(&lo_item.mo_hdr, lo_stream.data() + lz_pos, sizeof(s_p8_log_item_dat));
 
-        if(lo_item.mo_hdr.mu_size < sizeof(s_p8_log_item_hdr))
+        if(lo_item.mo_hdr.mu_size < sizeof(s_p8_log_item_dat))
         {
             break;
         }
 
-        size_t lz_payload_bytes = lo_item.mo_hdr.mu_size - sizeof(s_p8_log_item_hdr);
-        size_t lz_payload_start = lz_pos + sizeof(s_p8_log_item_hdr);
+        size_t lz_payload_bytes = lo_item.mo_hdr.mu_size - sizeof(s_p8_log_item_dat);
+        size_t lz_payload_start = lz_pos + sizeof(s_p8_log_item_dat);
         size_t lz_payload_end   = lz_payload_start + lz_payload_bytes;
         if(lz_payload_end > lo_stream.size())
         {
@@ -321,7 +321,7 @@ TEST_F(c_log_content_test, buf_hdr_size_valid)
     auto lo_parsed = parse_captured_buffers();
     ASSERT_FALSE(lo_parsed.mo_all_captured.empty());
 
-    size_t lz_min = sizeof(s_p8_data_buf_hdr) + sizeof(s_p8_log_item_hdr) + P8_SIZE_OF_ARG(uint32_t);
+    size_t lz_min = sizeof(s_p8_data_buf_hdr) + sizeof(s_p8_log_item_dat) + P8_SIZE_OF_ARG(uint32_t);
     EXPECT_GE(lo_parsed.mo_buf_hdr.mu_size, static_cast<uint16_t>(lz_min));
     EXPECT_LE(lo_parsed.mo_buf_hdr.mu_size, static_cast<uint16_t>(p8_test_get_buffer_size()));
 }
@@ -561,7 +561,7 @@ TEST_F(c_log_content_test, item_hdr_total_size_no_attrs)
 
     auto lo_parsed = parse_captured_buffers();
     EXPECT_EQ(lo_parsed.mo_item_hdr.mu_size,
-              static_cast<uint32_t>(sizeof(s_p8_log_item_hdr) + lo_parsed.mo_item_hdr.mu_args_size));
+              static_cast<uint32_t>(sizeof(s_p8_log_item_dat) + lo_parsed.mo_item_hdr.mu_args_size));
 }
 
 TEST_F(c_log_content_test, item_hdr_attrs_count_zero)
@@ -1259,7 +1259,7 @@ TEST_F(c_log_content_test, item_size_with_attrs)
 
     size_t lz_attrs_bytes = sizeof(p8_attr_id) + sizeof(uint64_t);
     EXPECT_EQ(lo_parsed.mo_item_hdr.mu_size,
-              static_cast<uint32_t>(sizeof(s_p8_log_item_hdr) + lo_parsed.mo_item_hdr.mu_args_size + lz_attrs_bytes));
+              static_cast<uint32_t>(sizeof(s_p8_log_item_dat) + lo_parsed.mo_item_hdr.mu_args_size + lz_attrs_bytes));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1335,7 +1335,7 @@ TEST_F(c_log_content_test, no_args_no_attrs)
     auto lo_parsed = parse_captured_buffers();
     EXPECT_EQ(lo_parsed.mo_item_hdr.mu_args_size, 0u);
     EXPECT_EQ(lo_parsed.mo_item_hdr.mu_attrs_count, 0u);
-    EXPECT_EQ(lo_parsed.mo_item_hdr.mu_size, static_cast<uint32_t>(sizeof(s_p8_log_item_hdr)));
+    EXPECT_EQ(lo_parsed.mo_item_hdr.mu_size, static_cast<uint32_t>(sizeof(s_p8_log_item_dat)));
 }
 
 TEST_F(c_log_content_test, string_truncated_to_uint16_max)
@@ -1434,7 +1434,7 @@ TEST_F(c_log_content_test, multi_send_three_items)
     EXPECT_EQ(lo_items[0].mo_hdr.mu_args_size, P8_SIZE_OF_ARG(uint32_t));
     EXPECT_EQ(lo_items[0].mo_hdr.mu_attrs_count, 0u);
     EXPECT_EQ(lo_items[0].mo_hdr.mu_size,
-              static_cast<uint32_t>(sizeof(s_p8_log_item_hdr) + lo_items[0].mo_hdr.mu_args_size));
+              static_cast<uint32_t>(sizeof(s_p8_log_item_dat) + lo_items[0].mo_hdr.mu_args_size));
     {
         size_t   lz_off = 0;
         uint64_t lu_val = read_val<uint64_t>(lo_items[0].mo_payload, lz_off);
@@ -1446,7 +1446,7 @@ TEST_F(c_log_content_test, multi_send_three_items)
     EXPECT_EQ(lo_items[1].mo_hdr.mu_level, static_cast<uint8_t>(e_p8_trace1));
     EXPECT_EQ(lo_items[1].mo_hdr.mu_attrs_count, 0u);
     EXPECT_EQ(lo_items[1].mo_hdr.mu_size,
-              static_cast<uint32_t>(sizeof(s_p8_log_item_hdr) + lo_items[1].mo_hdr.mu_args_size));
+              static_cast<uint32_t>(sizeof(s_p8_log_item_dat) + lo_items[1].mo_hdr.mu_args_size));
     {
         size_t      lz_off = 0;
         std::string lo_str = read_string(lo_items[1].mo_payload, lz_off);
