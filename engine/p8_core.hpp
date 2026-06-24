@@ -5,6 +5,7 @@
 #include "p8_memory_budget.hpp"
 #include "p8_protocol.h"
 
+#include "kit/event.hpp"
 #include "kit/list.hpp"
 #include "kit/spin_lock.hpp"
 
@@ -14,10 +15,12 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
 #define P8_CORE_ACQUIRE_TIMEOUT_MS 100
+#define P8_CORE_THREAD_TIMEOUT_MS  50
 
 class cp8_tls_writer;
 struct s_p8_log_desc;
@@ -43,6 +46,9 @@ public:
     static cp8_core *get_global_core(uint32_t iu_timeoutms);
     bool             get_initialized() const;
     void             exceptional_flush();
+
+    // worker thread: signal an external event so the loop runs an iteration immediately
+    void notify();
 
     // TLS writer registry
     void register_writer(cp8_tls_writer *ip_writer);
@@ -93,6 +99,12 @@ private:
     bool init_buffer_pool(const char *ip_max_memory_size, const char *ip_initial_memory_size);
     bool init_header(const struct s_p8_config *ip_config);
 
+    // worker thread
+    void start_worker();
+    void stop_worker();
+    void worker_main();
+    void do_iteration();
+
     bool                  mb_initialized = false;
     std::atomic<uint32_t> mu_ref_count { 1 };
 
@@ -120,6 +132,15 @@ private:
     cp8_tls_writer  *mp_writers_head  = nullptr;
     size_t           mz_writers_count = 0;
     kit::c_spin_lock mo_writers_lock;
+
+    // worker thread: wakes on an external event (mu_event_wake) or every
+    // P8_CORE_THREAD_TIMEOUT_MS, stops on mu_event_stop.
+    static constexpr uint32_t mu_event_wake = 0;
+    static constexpr uint32_t mu_event_stop = 1;
+
+    std::thread mo_worker_thread;
+    c_event     mo_worker_event;
+    bool        mb_worker_running = false;
 
 #ifdef P8_TESTING
     friend size_t                                   p8_test_get_buffer_size();

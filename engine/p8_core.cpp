@@ -7,6 +7,7 @@
 #include "kit/endian.hpp"
 #include "kit/shared_mem.hpp"
 #include "kit/system.hpp"
+#include "kit/thread.hpp"
 #include "kit/time.hpp"
 
 #include <nlohmann/json.hpp>
@@ -248,11 +249,15 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
     init_header(ip_config);
 
     mb_initialized = true;
+
+    start_worker();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 cp8_core::~cp8_core()
 {
+    stop_worker();
+
     for(auto &lo_pair : mo_log_descs)
     {
         delete lo_pair.second;
@@ -408,6 +413,70 @@ void cp8_core::exceptional_flush()
     {
         return;
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::start_worker()
+{
+    const c_event::e_type la_types[] = { c_event::e_single_auto, c_event::e_multi };
+
+    if(!mo_worker_event.init(2, la_types))
+    {
+        std::fprintf(stderr, "cp8_core::start_worker: event init failed\n");
+        return;
+    }
+
+    mo_worker_thread  = std::thread(&cp8_core::worker_main, this);
+    mb_worker_running = true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::stop_worker()
+{
+    if(!mb_worker_running)
+    {
+        return;
+    }
+
+    mo_worker_event.set(mu_event_stop);
+
+    if(mo_worker_thread.joinable())
+    {
+        mo_worker_thread.join();
+    }
+
+    mb_worker_running = false;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::worker_main()
+{
+    // best-effort: raising priority typically needs elevated privileges, failure is non-fatal
+    kit::set_thread_priority(kit::e_tp_time_critical);
+
+    for(;;)
+    {
+        uint32_t lu_signal = mo_worker_event.wait(P8_CORE_THREAD_TIMEOUT_MS);
+
+        if(lu_signal == mu_event_stop)
+        {
+            break;
+        }
+
+        // lu_signal == mu_event_wake (external event) or c_event::timeout
+        do_iteration();
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::notify()
+{
+    mo_worker_event.set(mu_event_wake);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::do_iteration()
+{
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
