@@ -421,8 +421,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
     {
         if((mz_buf_max - mz_buf_used) < (P8_LOG_MIN_BUFFER_SPACE + sizeof(s_p8_log_item_dat))) [[unlikely]]
         {
-            // TODO: replace release_xxx by function to consume data
-            mp_core->release_buffer(mp_buffer);
+            mp_core->submit_buffer(mp_buffer);
             mp_buffer = nullptr;
         }
     }
@@ -661,20 +660,30 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         lp_buf_hdr->mu_stop_time             = lp_hdr->mu_timestamp;
     }
 
-    // release accumulated fragment buffers in logical order
-    if(mo_fragments.size() > 0)
+    // Hand off in a single locked submit: the current buffer is only released
+    // when it can no longer fit another item (< P8_LOG_MIN_BUFFER_SPACE left),
+    // otherwise it is kept for the next record. When it is released alongside
+    // fragments, fold it into the chain so the whole record ships as one bundle.
+    // Scoped so lb_buf_full does not span the goto into lbl_discard.
     {
-        // TODO: replace release_xxx by function to consume data
-        mp_core->release_buffers(mo_fragments);
-    }
+        const bool lb_buf_full = (mz_buf_max - mz_buf_used) < P8_LOG_MIN_BUFFER_SPACE;
 
-    // post-check: if remaining buffer < P8_LOG_MIN_BUFFER_SPACE, return it to pool
-    if(mz_buf_max - mz_buf_used < P8_LOG_MIN_BUFFER_SPACE) [[unlikely]]
-    {
-        // TODO: replace release_xxx by function to consume data
-        mp_core->release_buffer(mp_buffer);
-        mp_buffer   = nullptr;
-        mz_buf_used = 0;
+        if(mo_fragments.size() > 0)
+        {
+            if(lb_buf_full) [[unlikely]]
+            {
+                mo_fragments.push_last(mp_buffer);
+                mp_buffer   = nullptr;
+                mz_buf_used = 0;
+            }
+            mp_core->submit_chain(mo_fragments);
+        }
+        else if(lb_buf_full) [[unlikely]]
+        {
+            mp_core->submit_buffer(mp_buffer);
+            mp_buffer   = nullptr;
+            mz_buf_used = 0;
+        }
     }
 
     return true;
@@ -687,7 +696,8 @@ lbl_discard:
 
     if(mo_fragments.size() > 0)
     {
-        // TODO: replace release_xxx by function to consume data
+        // incomplete logical record (FRAGMENT chain without a closing buffer):
+        // recycle instead of submitting so the consumer never sees a partial chain
         mp_core->release_buffers(mo_fragments);
     }
     mp_buffer   = nullptr;
