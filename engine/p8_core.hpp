@@ -5,8 +5,8 @@
 #include "p8_memory_budget.hpp"
 #include "p8_protocol.h"
 
+#include "kit/event.hpp"
 #include "kit/list.hpp"
-#include "kit/spin_lock.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -14,10 +14,12 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
 #define P8_CORE_ACQUIRE_TIMEOUT_MS 100
+#define P8_CORE_THREAD_TIMEOUT_MS  50
 
 class cp8_tls_writer;
 struct s_p8_log_desc;
@@ -44,6 +46,9 @@ public:
     bool             get_initialized() const;
     void             exceptional_flush();
 
+    // worker thread: signal an external event so the loop runs an iteration immediately
+    void notify();
+
     // TLS writer registry
     void register_writer(cp8_tls_writer *ip_writer);
     void unregister_writer(cp8_tls_writer *ip_writer);
@@ -62,6 +67,12 @@ public:
     uint8_t      *acquire_buffer();
     void          release_buffer(uint8_t *ip_buffer);
     void          release_buffers(kit::c_lst<uint8_t *> &io_buffers);
+
+    // ready-queue: producers hand filled data buffers to the core for the
+    // worker thread to consume. submit_buffer takes a single buffer,
+    // submit_chain takes a fragment list (consumed in logical order).
+    void submit_buffer(uint8_t *ip_buffer);
+    void submit_chain(kit::c_lst<uint8_t *> &io_buffers);
 
     // log descriptors
     struct s_p8_log_desc *resolve_log_desc(uint64_t    iu_hash,
@@ -93,6 +104,12 @@ private:
     bool init_buffer_pool(const char *ip_max_memory_size, const char *ip_initial_memory_size);
     bool init_header(const struct s_p8_config *ip_config);
 
+    // worker thread
+    void start_worker();
+    void stop_worker();
+    void worker_main();
+    void do_iteration();
+
     bool                  mb_initialized = false;
     std::atomic<uint32_t> mu_ref_count { 1 };
 
@@ -117,9 +134,23 @@ private:
 
     // TLS writer registry: intrusive doubly-linked list of all live writers.
     // Lock ordering: mo_writers_lock -> writer->mp_lock (never reverse).
-    cp8_tls_writer  *mp_writers_head  = nullptr;
-    size_t           mz_writers_count = 0;
-    kit::c_spin_lock mo_writers_lock;
+    cp8_tls_writer *mp_writers_head  = nullptr;
+    size_t          mz_writers_count = 0;
+    std::mutex      mo_writers_lock;
+
+    // worker thread: wakes on an external event (mu_event_wake) or every
+    // P8_CORE_THREAD_TIMEOUT_MS, stops on mu_event_stop.
+    static constexpr uint32_t mu_event_wake = 0;
+    static constexpr uint32_t mu_event_stop = 1;
+
+    std::thread mo_worker_thread;
+    c_event     mo_worker_event;
+    bool        mb_worker_running = false;
+
+    // ready-queue: filled data buffers submitted by producers, drained and
+    // recycled by the worker thread. Protected by a mutex on the hot path.
+    kit::c_lst<uint8_t *> mo_ready_queue { 128 };
+    std::mutex            mo_ready_lock;
 
 #ifdef P8_TESTING
     friend size_t                                   p8_test_get_buffer_size();

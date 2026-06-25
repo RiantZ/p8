@@ -7,6 +7,7 @@
 #include "kit/endian.hpp"
 #include "kit/shared_mem.hpp"
 #include "kit/system.hpp"
+#include "kit/thread.hpp"
 #include "kit/time.hpp"
 
 #include <nlohmann/json.hpp>
@@ -248,11 +249,15 @@ cp8_core::cp8_core(const struct s_p8_config *ip_config)
     init_header(ip_config);
 
     mb_initialized = true;
+
+    start_worker();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 cp8_core::~cp8_core()
 {
+    stop_worker();
+
     for(auto &lo_pair : mo_log_descs)
     {
         delete lo_pair.second;
@@ -411,9 +416,90 @@ void cp8_core::exceptional_flush()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::start_worker()
+{
+    const c_event::e_type la_types[] = { c_event::e_single_auto, c_event::e_multi };
+
+    if(!mo_worker_event.init(2, la_types))
+    {
+        std::fprintf(stderr, "cp8_core::start_worker: event init failed\n");
+        return;
+    }
+
+    mo_worker_thread  = std::thread(&cp8_core::worker_main, this);
+    mb_worker_running = true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::stop_worker()
+{
+    if(!mb_worker_running)
+    {
+        return;
+    }
+
+    mo_worker_event.set(mu_event_stop);
+
+    if(mo_worker_thread.joinable())
+    {
+        mo_worker_thread.join();
+    }
+
+    mb_worker_running = false;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::worker_main()
+{
+    // best-effort: raising priority typically needs elevated privileges, failure is non-fatal
+    kit::set_thread_priority(kit::e_tp_time_critical);
+
+    for(;;)
+    {
+        uint32_t lu_signal = mo_worker_event.wait(P8_CORE_THREAD_TIMEOUT_MS);
+
+        if(lu_signal == mu_event_stop)
+        {
+            // final drain: consume anything submitted between the last iteration and stop
+            do_iteration();
+            break;
+        }
+
+        // lu_signal == mu_event_wake (external event) or c_event::timeout
+        do_iteration();
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::notify()
+{
+    mo_worker_event.set(mu_event_wake);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::do_iteration()
+{
+    // move the ready-queue out under the lock, then recycle outside it so
+    // the (heavier) pool work never runs while producers are waiting on the lock
+    kit::c_lst<uint8_t *> lo_ready;
+
+    {
+        std::lock_guard<std::mutex> lo_guard(mo_ready_lock);
+
+        while(mo_ready_queue.size() > 0)
+        {
+            lo_ready.push_last(mo_ready_queue.pull_first());
+        }
+    }
+
+    // stub consumption: no sink yet — recycle straight back to the pool
+    lo_ready.clear([this](uint8_t *ip_buf) { release_buffer(ip_buf); });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void cp8_core::register_writer(cp8_tls_writer *ip_writer)
 {
-    std::lock_guard<kit::c_spin_lock> lo_guard(mo_writers_lock);
+    std::lock_guard<std::mutex> lo_guard(mo_writers_lock);
     ip_writer->mp_prev_writer = nullptr;
     ip_writer->mp_next_writer = mp_writers_head;
     if(mp_writers_head)
@@ -427,7 +513,7 @@ void cp8_core::register_writer(cp8_tls_writer *ip_writer)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void cp8_core::unregister_writer(cp8_tls_writer *ip_writer)
 {
-    std::lock_guard<kit::c_spin_lock> lo_guard(mo_writers_lock);
+    std::lock_guard<std::mutex> lo_guard(mo_writers_lock);
     if(ip_writer->mp_prev_writer)
     {
         ip_writer->mp_prev_writer->mp_next_writer = ip_writer->mp_next_writer;
@@ -576,14 +662,6 @@ void cp8_core::release_buffer(uint8_t *ip_buffer)
         return;
     }
 
-#ifdef P8_TESTING
-    if(mb_capture_enabled)
-    {
-        std::lock_guard<std::mutex> lo_lock(mo_capture_mutex);
-        mo_captured_buffers.emplace_back(ip_buffer, ip_buffer + mz_data_buffer_size);
-    }
-#endif
-
     mp_data_pool->recycle(ip_buffer);
 }
 
@@ -600,18 +678,64 @@ void cp8_core::release_buffers(kit::c_lst<uint8_t *> &io_buffers)
         return;
     }
 
-    io_buffers.clear(
-        [this](uint8_t *ip_buf)
-        {
+    io_buffers.clear([this](uint8_t *ip_buf) { mp_data_pool->recycle(ip_buf); });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::submit_buffer(uint8_t *ip_buffer)
+{
+    if(!ip_buffer || !mb_initialized)
+    {
+        return;
+    }
+
 #ifdef P8_TESTING
-            if(mb_capture_enabled)
-            {
-                std::lock_guard<std::mutex> lo_lock(mo_capture_mutex);
-                mo_captured_buffers.emplace_back(ip_buf, ip_buf + mz_data_buffer_size);
-            }
+    if(mb_capture_enabled)
+    {
+        std::lock_guard<std::mutex> lo_lock(mo_capture_mutex);
+        mo_captured_buffers.emplace_back(ip_buffer, ip_buffer + mz_data_buffer_size);
+    }
 #endif
-            mp_data_pool->recycle(ip_buf);
-        });
+
+    {
+        std::lock_guard<std::mutex> lo_guard(mo_ready_lock);
+        mo_ready_queue.push_last(ip_buffer);
+    }
+
+    notify();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::submit_chain(kit::c_lst<uint8_t *> &io_buffers)
+{
+    if(!mb_initialized)
+    {
+        return;
+    }
+
+    if(0 == io_buffers.size())
+    {
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lo_guard(mo_ready_lock);
+
+        io_buffers.clear(
+            [this](uint8_t *ip_buf)
+            {
+#ifdef P8_TESTING
+                if(mb_capture_enabled)
+                {
+                    std::lock_guard<std::mutex> lo_lock(mo_capture_mutex);
+                    mo_captured_buffers.emplace_back(ip_buf, ip_buf + mz_data_buffer_size);
+                }
+#endif
+                mo_ready_queue.push_last(ip_buf);
+            });
+    }
+
+    notify();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -975,7 +1099,7 @@ void p8_test_clear_captured_buffers()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 size_t cp8_core::get_writer_count()
 {
-    std::lock_guard<kit::c_spin_lock> lo_guard(mo_writers_lock);
+    std::lock_guard<std::mutex> lo_guard(mo_writers_lock);
     return mz_writers_count;
 }
 

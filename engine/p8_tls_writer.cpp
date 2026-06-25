@@ -106,18 +106,25 @@ void cp8_tls_writer::core_push()
 {
     std::lock_guard<kit::c_spin_lock> lo_guard(*mp_lock);
 
+    // Submit the whole logical record as a single bundle: fold the current tail
+    // buffer into the fragment chain so the handoff takes the ready lock once.
     if(mo_fragments.size() > 0)
     {
-        // TODO: replace release_xxx by function to consume data
-        mp_core->release_buffers(mo_fragments);
+        if(mp_buffer)
+        {
+            mo_fragments.push_last(mp_buffer);
+            mp_buffer = nullptr;
+        }
+        mp_core->submit_chain(mo_fragments);
     }
-
-    if(mp_buffer)
+    else if(mp_buffer)
     {
-        // TODO: replace release_xxx by function to consume data
-        mp_core->release_buffer(mp_buffer);
+        mp_core->submit_buffer(mp_buffer);
         mp_buffer = nullptr;
     }
+
+    // keep the invariant: no current buffer => no bytes used
+    mz_buf_used = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
