@@ -8,6 +8,8 @@
 
 #include "kit/time.hpp"
 
+#define P8_LOG_MIN_BUFFER_SPACE 32 // Minimal remaining space in data buffer
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 enum e_prefix_type
 {
@@ -101,7 +103,7 @@ size_t cp8_log::parse_format_string(struct s_p8_log_varg *op_args, size_t iz_arg
                 {
                     return lz_count;
                 }
-                op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT32;
                 op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
                 lz_count++;
                 lu_has_width = 1;
@@ -143,60 +145,60 @@ size_t cp8_log::parse_format_string(struct s_p8_log_varg *op_args, size_t iz_arg
 
                 if(e_prefix_unknown == le_prefix)
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT32;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
                 }
                 else if(e_prefix_ll == le_prefix || e_prefix_i64 == le_prefix)
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT64;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT64;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint64_t);
                 }
                 else if(e_prefix_h == le_prefix)
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT16;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT16;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint16_t);
                 }
                 else if(e_prefix_hh == le_prefix)
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT8;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT8;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint8_t);
                 }
                 else if(e_prefix_l == le_prefix)
                 {
 #if defined(G_OS_WINDOWS)
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT32;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
 #elif defined(GTX64)
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT64;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT64;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint64_t);
 #else
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT32;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
 #endif
                 }
                 else if(e_prefix_i32 == le_prefix)
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT32;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
                 }
                 else if(e_prefix_i == le_prefix)
                 {
 #ifdef GTX64
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT64;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT64;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint64_t);
 #else
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT32;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
 #endif
                 }
                 else if(e_prefix_j == le_prefix)
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INTMAX;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INTMAX;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uintmax_t);
                 }
                 else
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_INT32;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_INT32;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(uint32_t);
                 }
 
@@ -214,30 +216,30 @@ size_t cp8_log::parse_format_string(struct s_p8_log_varg *op_args, size_t iz_arg
 
                 if(e_prefix_h == le_prefix)
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_STRA;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_STRA;
                     op_args[lz_count].mu_size = lu_has_width;
                 }
                 else if('S' == *lp_iter)
                 {
 #if defined(G_OS_WINDOWS)
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_STRA;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_STRA;
 #else
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_USTR32;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_USTR32;
 #endif
                     op_args[lz_count].mu_size = lu_has_width;
                 }
                 else if(e_prefix_l == le_prefix)
                 {
 #if defined(G_OS_WINDOWS)
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_USTR16;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_USTR16;
 #else
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_USTR32;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_USTR32;
 #endif
                     op_args[lz_count].mu_size = lu_has_width;
                 }
                 else
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_USTR8;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_USTR8;
                     op_args[lz_count].mu_size = lu_has_width;
                 }
 
@@ -251,7 +253,7 @@ size_t cp8_log::parse_format_string(struct s_p8_log_varg *op_args, size_t iz_arg
                 {
                     return lz_count;
                 }
-                op_args[lz_count].mu_type = P8_ARG_TYPE_PVOID;
+                op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_PVOID;
                 op_args[lz_count].mu_size = P8_SIZE_OF_ARG(void *);
                 lz_count++;
                 lb_percent = false;
@@ -273,12 +275,12 @@ size_t cp8_log::parse_format_string(struct s_p8_log_varg *op_args, size_t iz_arg
 
                 if(e_prefix_upper_l == le_prefix)
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_LDOUBLE;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_LDOUBLE;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(long double);
                 }
                 else
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_DOUBLE;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_DOUBLE;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(double);
                 }
 
@@ -296,27 +298,27 @@ size_t cp8_log::parse_format_string(struct s_p8_log_varg *op_args, size_t iz_arg
 
                 if(e_prefix_h == le_prefix)
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_CHAR;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_CHAR;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(char);
                 }
                 else if(e_prefix_l == le_prefix)
                 {
 #if defined(G_OS_WINDOWS)
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_CHAR16;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_CHAR16;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(wchar_t);
 #else
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_CHAR32;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_CHAR32;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(wchar_t);
 #endif
                 }
                 else if('c' == *lp_iter)
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_CHAR;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_CHAR;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(char);
                 }
                 else
                 {
-                    op_args[lz_count].mu_type = P8_ARG_TYPE_CHAR;
+                    op_args[lz_count].mu_type = P8_LOG_ARG_TYPE_CHAR;
                     op_args[lz_count].mu_size = P8_SIZE_OF_ARG(char);
                 }
 
@@ -396,14 +398,14 @@ bool cp8_log::send(enum e_p8_level             ie_level,
                    const char                 *ip_format,
                    va_list                     io_args)
 {
-    struct s_p8_log_desc     *lp_desc          = nullptr;
-    struct s_p8_log_item_dat *lp_hdr           = nullptr;
-    uint64_t                  lu_hash          = 0;
-    uint8_t                  *lp_dst           = nullptr;
-    uint8_t                  *lp_buf_end       = nullptr;
-    size_t                    lz_args_written  = 0;
-    size_t                    lz_attrs_written = 0;
-    uint8_t                   lu_attrs_count   = 0;
+    s_p8_log_desc     *lp_desc          = nullptr;
+    s_p8_log_item_dat *lp_hdr           = nullptr;
+    uint64_t           lu_hash          = 0;
+    uint8_t           *lp_dst           = nullptr;
+    uint8_t           *lp_buf_end       = nullptr;
+    size_t             lz_args_written  = 0;
+    size_t             lz_attrs_written = 0;
+    uint8_t            lu_attrs_count   = 0;
 
     // TODO: need to store in s_p8_log_item_hdr
     // TODO: need to check verbosity and drop if below min verbosity
@@ -490,15 +492,15 @@ bool cp8_log::send(enum e_p8_level             ie_level,
         {
             switch(lp_arg->mu_type)
             {
-            case P8_ARG_TYPE_USTR8:
-            case P8_ARG_TYPE_STRA:
-            case P8_ARG_TYPE_USTR16:
-            case P8_ARG_TYPE_USTR32:
+            case P8_LOG_ARG_TYPE_USTR8:
+            case P8_LOG_ARG_TYPE_STRA:
+            case P8_LOG_ARG_TYPE_USTR16:
+            case P8_LOG_ARG_TYPE_USTR32:
             {
                 const void *lp_str = nullptr;
                 uint16_t    lu_len = 0;
 
-                if(P8_ARG_TYPE_USTR16 == lp_arg->mu_type)
+                if(P8_LOG_ARG_TYPE_USTR16 == lp_arg->mu_type)
                 {
                     const uint16_t *lp_u16 = va_arg(io_args, const uint16_t *);
                     lp_str                 = lp_u16;
@@ -513,7 +515,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
                         lu_len          = (lz_bytes > UINT16_MAX) ? UINT16_MAX : static_cast<uint16_t>(lz_bytes);
                     }
                 }
-                else if(P8_ARG_TYPE_USTR32 == lp_arg->mu_type)
+                else if(P8_LOG_ARG_TYPE_USTR32 == lp_arg->mu_type)
                 {
                     const wchar_t *lp_w = va_arg(io_args, const wchar_t *);
                     lp_str              = lp_w;
@@ -559,7 +561,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
 #endif
                     if(sizeof(uint64_t) == lp_arg->mu_size)
                 {
-                    if(P8_ARG_TYPE_DOUBLE != lp_arg->mu_type) [[likely]]
+                    if(P8_LOG_ARG_TYPE_DOUBLE != lp_arg->mu_type) [[likely]]
                     {
                         uint64_t lu_val = va_arg(io_args, uint64_t);
                         memcpy(lp_dst, &lu_val, sizeof(lu_val));
@@ -570,7 +572,7 @@ bool cp8_log::send(enum e_p8_level             ie_level,
                         memcpy(lp_dst, &ld_val, sizeof(ld_val));
                     }
                 }
-                else if(P8_ARG_TYPE_LDOUBLE == lp_arg->mu_type)
+                else if(P8_LOG_ARG_TYPE_LDOUBLE == lp_arg->mu_type)
                 {
                     long double ld_val = va_arg(io_args, long double);
                     memcpy(lp_dst, &ld_val, sizeof(ld_val));

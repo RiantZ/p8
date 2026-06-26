@@ -4,7 +4,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
+// #include <string.h>
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -19,17 +19,63 @@ extern "C"
 #endif
 
 #define P8_PACKET_MAX_SIZE      (1 << 16) // 64KB max page
-
-#define P8_PACKET_MAIN          0
-#define P8_PACKET_LOGS          1
-#define P8_PACKET_TRACES        2
-#define P8_PACKET_METRICS       3
-#define P8_PACKET_SERVICE       4
+//
+#define P8_PACKET_MAIN          0 // hello/handshake packet carrying s_p8_hdr (first packet on a connection)
+#define P8_PACKET_LOGS          1 // log records buffer (s_p8_data_buf_hdr + s_p8_log_item_dat stream)
+#define P8_PACKET_TRACES        2 // distributed-trace spans buffer
+#define P8_PACKET_METRICS       3 // metric samples buffer
+#define P8_PACKET_SERVICE       4 // service descriptors buffer (s_p8_svc_hdr entries: logs, attrs, threads, ...)
 
 #define P8_PROTOCOL_VERSION     1
 
 #define P8_PROCESS_NAME_MAX_LEN 256
 #define P8_HOST_NAME_MAX_LEN    256
+
+// Service-data type codes (svc_entry.mu_type) carried inside a P8_PACKET_SERVICE
+// buffer. Each entry describes one immutable, pre-serialized descriptor that the
+// library transmits once so the receiver can resolve the compact IDs referenced
+// by the LOGS/TRACES/METRICS data packets.
+#define P8_SVC_TYPE_UNK         0x00     // unknown / unspecified service entry
+#define P8_SVC_TYPE_LOG_DESC    0x01     // log descriptor: hash, line, file, function, format, var-arg types
+#define P8_SVC_TYPE_ATTR        0x02     // attribute descriptor: id, value type, name
+#define P8_SVC_TYPE_THREAD      0x03     // thread descriptor: OS thread id, thread name
+#define P8_SVC_TYPE_TRACE       0x04     // trace descriptor: trace id, parent id, line, file, function, args format
+#define P8_SVC_TYPE_MTK         0x05     // metric descriptor: id, flags, name, description, unit, min/max, on-state
+#define P8_SVC_TYPE_MODULE      0x06     // module descriptor: handle, verbosity, name
+
+#define P8_DATA_FLAG_FRAGMENT   (1 << 0) // buffer tail data continues in the next buffer for the same thread
+#define P8_DATA_FLAG_RESERVED_1 (1 << 1)
+#define P8_DATA_FLAG_RESERVED_2 (1 << 2)
+#define P8_DATA_FLAG_RESERVED_3 (1 << 3)
+#define P8_DATA_FLAG_RESERVED_4 (1 << 4)
+#define P8_DATA_FLAG_RESERVED_5 (1 << 5)
+#define P8_DATA_FLAG_RESERVED_6 (1 << 6)
+#define P8_DATA_FLAG_RESERVED_7 (1 << 7)
+
+// serialized argument types
+#define P8_ATTR_TYPE_STR        0x00 // utf-8 zero terminated string
+#define P8_ATTR_TYPE_F64        0x01 // 64-bit float
+#define P8_ATTR_TYPE_I64        0x02 // 64-bit signed integer
+#define P8_ATTR_TYPE_U64        0x03 // 64-bit unsigned integer
+
+// Type codes for log var-args (s_p8_log_varg.mu_type), identifying how each
+// serialized argument value should be interpreted/decoded.
+#define P8_LOG_ARG_TYPE_UNK     0x00 // unknown / unspecified type
+#define P8_LOG_ARG_TYPE_CHAR    0x01 // 8-bit character
+#define P8_LOG_ARG_TYPE_INT8    0x01 // 8-bit signed integer
+#define P8_LOG_ARG_TYPE_CHAR16  0x02 // 16-bit (UTF-16) character
+#define P8_LOG_ARG_TYPE_INT16   0x03 // 16-bit signed integer
+#define P8_LOG_ARG_TYPE_INT32   0x04 // 32-bit signed integer
+#define P8_LOG_ARG_TYPE_INT64   0x05 // 64-bit signed integer
+#define P8_LOG_ARG_TYPE_DOUBLE  0x06 // double-precision float
+#define P8_LOG_ARG_TYPE_PVOID   0x07 // pointer (void*)
+#define P8_LOG_ARG_TYPE_USTR16  0x08 // UTF-16 string
+#define P8_LOG_ARG_TYPE_STRA    0x09 // ANSI/8-bit string
+#define P8_LOG_ARG_TYPE_USTR8   0x0A // UTF-8 string
+#define P8_LOG_ARG_TYPE_USTR32  0x0B // UTF-32 string
+#define P8_LOG_ARG_TYPE_CHAR32  0x0C // 32-bit (UTF-32) character
+#define P8_LOG_ARG_TYPE_INTMAX  0x0D // intmax_t (largest signed integer)
+#define P8_LOG_ARG_TYPE_LDOUBLE 0x0E // long double
 
     // Base hello message from P8, the first packet to be sent
     // WARNING: the header is always in little-endian!
@@ -51,17 +97,9 @@ extern "C"
         uint64_t mu_hash; // header control hash
     };
 
-    // Service-data type codes (svc_entry.mu_type) carried inside a P8_PACKET_SERVICE
-    // buffer. Each entry describes one immutable, pre-serialized descriptor that the
-    // library transmits once so the receiver can resolve the compact IDs referenced
-    // by the LOGS/TRACES/METRICS data packets.
-#define P8_SVC_TYPE_UNK      0x00 // unknown / unspecified service entry
-#define P8_SVC_TYPE_LOG_DESC 0x01 // log descriptor: hash, line, file, function, format, var-arg types
-#define P8_SVC_TYPE_ATTR     0x02 // attribute descriptor: id, value type, name
-#define P8_SVC_TYPE_THREAD   0x03 // thread descriptor: OS thread id, thread name
-#define P8_SVC_TYPE_TRACE    0x04 // trace descriptor: trace id, parent id, line, file, function, args format
-#define P8_SVC_TYPE_MTK      0x05 // metric descriptor: id, flags, name, description, unit, min/max, on-state
-#define P8_SVC_TYPE_MODULE   0x06 // module descriptor: handle, verbosity, name
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // SERVICE
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     // Header of every service entry inside a P8_PACKET_SERVICE buffer (4 bytes).
     struct s_p8_svc_hdr
@@ -71,61 +109,19 @@ extern "C"
         uint16_t mu_size;  // size including header
     };
 
-#define P8_DATA_FLAG_FRAGMENT   (1 << 0) // buffer tail data continues in the next buffer for the same thread
-#define P8_DATA_FLAG_RESERVED_1 (1 << 1)
-#define P8_DATA_FLAG_RESERVED_2 (1 << 2)
-#define P8_DATA_FLAG_RESERVED_3 (1 << 3)
-#define P8_DATA_FLAG_RESERVED_4 (1 << 4)
-#define P8_DATA_FLAG_RESERVED_5 (1 << 5)
-#define P8_DATA_FLAG_RESERVED_6 (1 << 6)
-#define P8_DATA_FLAG_RESERVED_7 (1 << 7)
-
-    // Header of EVERY data buffer: logs, traces, metrics
-    struct s_p8_data_buf_hdr
+    // Serialized representation of s_p8_attr_desc
+    // Fixed-size header; variable-length data follows in the buffer.
+    // Name (string utf8) include a NUL terminator.
+    struct s_p8_attr_svc
     {
-        uint8_t  mu_packet_type; // P8_PACKET_XXXX
-        uint8_t  mu_flags;       // P8_DATA_FLAG_XXX
-        uint16_t mu_size;        // size in bytes
-        uint32_t mu_thread_id;   // thread ID which emits data
-        uint64_t mu_start_time;  // first timestamp
-        uint64_t mu_stop_time;   // last timestamp
+        s_p8_svc_hdr ms_hdr;  // service item header, 4
+        int32_t      mi_id;   // ID of the attribute
+        uint8_t      mu_type; // attribute type: P8_ATTR_TYPE_XXX
+        //* Serialized name
+        //* padding to align total size on 8 bytes boundary
     };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// LOGS
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// Type codes for log var-args (s_p8_log_varg.mu_type), identifying how each
-// serialized argument value should be interpreted/decoded.
-#define P8_ARG_TYPE_UNK     0x00 // unknown / unspecified type
-#define P8_ARG_TYPE_CHAR    0x01 // 8-bit character
-#define P8_ARG_TYPE_INT8    0x01 // 8-bit signed integer
-#define P8_ARG_TYPE_CHAR16  0x02 // 16-bit (UTF-16) character
-#define P8_ARG_TYPE_INT16   0x03 // 16-bit signed integer
-#define P8_ARG_TYPE_INT32   0x04 // 32-bit signed integer
-#define P8_ARG_TYPE_INT64   0x05 // 64-bit signed integer
-#define P8_ARG_TYPE_DOUBLE  0x06 // double-precision float
-#define P8_ARG_TYPE_PVOID   0x07 // pointer (void*)
-#define P8_ARG_TYPE_USTR16  0x08 // UTF-16 string
-#define P8_ARG_TYPE_STRA    0x09 // ANSI/8-bit string
-#define P8_ARG_TYPE_USTR8   0x0A // UTF-8 string
-#define P8_ARG_TYPE_USTR32  0x0B // UTF-32 string
-#define P8_ARG_TYPE_CHAR32  0x0C // 32-bit (UTF-32) character
-#define P8_ARG_TYPE_INTMAX  0x0D // intmax_t (largest signed integer)
-#define P8_ARG_TYPE_LDOUBLE 0x0E // long double
-
-    struct s_p8_log_varg
-    {
-        uint8_t mu_type; // var arg type: P8_ARG_TYPE_XXXXXX
-        uint8_t mu_size; // for fixed-size args: value size in bytes (1, 2, 4, 8, sizeof(void*),
-                         // sizeof(intmax_t), sizeof(long double)); for string args
-                         // (STRA/USTR8/USTR16/USTR32): has-width flag (0 or 1)
-    };
-
-#define P8_LOG_MAX_ARGS         32
-#define P8_LOG_MIN_BUFFER_SPACE 32
-
-    // Serialized representation of s_p8_log_desc (the immutable log descriptor).
+    // Serialized representation of cp8_log::s_p8_log_desc (the immutable log descriptor).
     // Fixed-size header; variable-length data follows in the buffer.
     // String lengths are byte counts and do NOT include a NUL terminator.
     struct s_p8_log_item_svc
@@ -140,6 +136,33 @@ extern "C"
         //* Serialized strings: [file][function][format]
         //* Serialized args: s_p8_log_varg x mu_args_count
         //* padding to align total size on 8 bytes boundary
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // DATA: Logs, Metric, Traces items
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // Header of EVERY data buffer: logs, traces, metrics
+    struct s_p8_data_buf_hdr
+    {
+        uint8_t  mu_packet_type; // P8_PACKET_XXXX
+        uint8_t  mu_flags;       // P8_DATA_FLAG_XXX
+        uint16_t mu_size;        // size in bytes
+        uint32_t mu_thread_id;   // thread ID which emits data
+        uint64_t mu_start_time;  // first timestamp
+        uint64_t mu_stop_time;   // last timestamp
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // LOGS
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    struct s_p8_log_varg
+    {
+        uint8_t mu_type; // var arg type: P8_LOG_ARG_TYPE_XXXXXX
+        uint8_t mu_size; // for fixed-size args: value size in bytes (1, 2, 4, 8, sizeof(void*),
+                         // sizeof(intmax_t), sizeof(long double)); for string args
+                         // (STRA/USTR8/USTR16/USTR32): has-width flag (0 or 1)
     };
 
     // Per-occurrence log record emitted into a P8_PACKET_LOGS buffer. References its

@@ -75,11 +75,11 @@ public:
     void submit_chain(kit::c_lst<uint8_t *> &io_buffers);
 
     // log descriptors
-    struct s_p8_log_desc *resolve_log_desc(uint64_t    iu_hash,
-                                           const char *ip_file,
-                                           uint32_t    iu_line,
-                                           const char *ip_function,
-                                           const char *ip_format);
+    s_p8_log_desc *resolve_log_desc(uint64_t    iu_hash,
+                                    const char *ip_file,
+                                    uint32_t    iu_line,
+                                    const char *ip_function,
+                                    const char *ip_format);
 
     // non-copyable, non-movable
     cp8_core(const cp8_core &)            = delete;
@@ -124,8 +124,8 @@ private:
     cp8_buffer_pool *mp_data_pool           = nullptr;
 
     // log descriptor registry (global, shared across all TLS cp8_log instances)
-    std::map<uint64_t, struct s_p8_log_desc *> mo_log_descs;
-    std::mutex                                 mo_log_desc_mutex;
+    std::map<uint64_t, s_p8_log_desc *> mo_log_descs;
+    std::mutex                          mo_log_desc_mutex;
 
     // attribute registry (global, TLS consumers sync via sync_attr_cache)
     std::vector<s_p8_attr_desc *>               mo_attr_descs;
@@ -149,7 +149,7 @@ private:
 
     // ready-queue: filled data buffers submitted by producers, drained and
     // recycled by the worker thread. Protected by a mutex on the hot path.
-    kit::c_lst<uint8_t *> mo_ready_queue { 128 };
+    kit::c_lst<uint8_t *> mo_ready_queue { 4096 };
     std::mutex            mo_ready_lock;
 
 #ifdef P8_TESTING
