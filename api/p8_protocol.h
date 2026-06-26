@@ -31,6 +31,11 @@ extern "C"
 #define P8_PROCESS_NAME_MAX_LEN 256
 #define P8_HOST_NAME_MAX_LEN    256
 
+// Max length (in bytes) of a serialized service-descriptor string (file,
+// function, format, attribute name). Longer strings are truncated to this
+// boundary so a single descriptor never bloats a service buffer.
+#define P8_SVC_STR_MAX_LEN      1024
+
 // Service-data type codes (svc_entry.mu_type) carried inside a P8_PACKET_SERVICE
 // buffer. Each entry describes one immutable, pre-serialized descriptor that the
 // library transmits once so the receiver can resolve the compact IDs referenced
@@ -121,7 +126,7 @@ extern "C"
         //* padding to align total size on 8 bytes boundary
     };
 
-    // Serialized representation of cp8_log::s_p8_log_desc (the immutable log descriptor).
+    // Serialized representation of s_p8_log_desc (the immutable log descriptor).
     // Fixed-size header; variable-length data follows in the buffer.
     // String lengths are byte counts and do NOT include a NUL terminator.
     struct s_p8_log_item_svc
