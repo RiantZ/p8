@@ -7,6 +7,8 @@
 
 #include <unordered_map>
 
+#define P8_LOG_MAX_ARGS 32 // Max count of log variable arguments
+
 struct s_p8_log_desc
 {
     uint64_t      mu_hash;
@@ -21,6 +23,7 @@ struct s_p8_log_desc
 
 class cp8_log : public cp8_tls_writer
 {
+
 public:
     cp8_log();
     void            set_verbosity(p_p8_module ip_module, enum e_p8_level ie_verbosity);

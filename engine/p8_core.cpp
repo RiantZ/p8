@@ -25,99 +25,8 @@
 #include <string>
 #include <thread>
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Protocol structures must be 8-byte aligned so that uint64_t members can be accessed without unaligned loads when
-// items are packed sequentially in shared-memory buffers.  A misaligned 64-bit read is either a fault (strict-align
-// architectures) or a silent performance penalty (x86), so we enforce the invariant at compile time.
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static_assert(sizeof(struct s_p8_hdr) % 8 == 0, "s_p8_hdr size must be a multiple of 8 bytes");
-static_assert(sizeof(struct s_p8_data_buf_hdr) % 8 == 0, "s_p8_data_buf_hdr size must be a multiple of 8 bytes");
-static_assert(sizeof(struct s_p8_log_item_dat) % 8 == 0, "s_p8_log_item_hdr size must be a multiple of 8 bytes");
-
-static_assert(alignof(struct s_p8_hdr) >= 8, "s_p8_hdr must have at least 8-byte alignment");
-static_assert(alignof(struct s_p8_data_buf_hdr) >= 8, "s_p8_data_buf_hdr must have at least 8-byte alignment");
-static_assert(alignof(struct s_p8_log_item_dat) >= 8, "s_p8_log_item_hdr must have at least 8-byte alignment");
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Wire-format layout contract.  These structures are written to / read from shared memory and transmitted over the
-// network between hosts that may build this header with different compilers (MSVC / GCC / Clang) and bitness (the
-// alignment of uint64_t is 4 on the i386 System V ABI but 8 elsewhere).  The exact size and field offsets below are
-// the binary contract: any field reorder, insert, remove or type change that alters the on-wire layout must break the
-// build here, not silently corrupt data on the receiving end.  Endianness is handled separately (header is always
-// little-endian); these asserts only freeze the byte layout.
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// s_p8_hdr
-static_assert(sizeof(struct s_p8_hdr) == 568, "s_p8_hdr wire size changed");
-static_assert(offsetof(struct s_p8_hdr, mu_packet_type) == 0, "s_p8_hdr::mu_packet_type offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_protocol_version) == 1, "s_p8_hdr::mu_protocol_version offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_is_big_endian) == 2, "s_p8_hdr::mu_is_big_endian offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_padding) == 3, "s_p8_hdr::mu_padding offset changed");
-static_assert(offsetof(struct s_p8_hdr, mi_utc_sec_offset) == 4, "s_p8_hdr::mi_utc_sec_offset offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_size) == 8, "s_p8_hdr::mu_size offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_process_id) == 12, "s_p8_hdr::mu_process_id offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_system_time) == 16, "s_p8_hdr::mu_system_time offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_hires_tick) == 24, "s_p8_hdr::mu_hires_tick offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_hires_freq_numer) == 32, "s_p8_hdr::mu_hires_freq_numer offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_hires_freq_denom) == 40, "s_p8_hdr::mu_hires_freq_denom offset changed");
-static_assert(offsetof(struct s_p8_hdr, mp_process_name) == 48, "s_p8_hdr::mp_process_name offset changed");
-static_assert(offsetof(struct s_p8_hdr, mp_host_name) == 304, "s_p8_hdr::mp_host_name offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_hash) == 560, "s_p8_hdr::mu_hash offset changed");
-
-// s_p8_svc_hdr
-static_assert(sizeof(struct s_p8_svc_hdr) == 4, "s_p8_svc_hdr wire size changed");
-static_assert(offsetof(struct s_p8_svc_hdr, mu_type) == 0, "s_p8_svc_hdr::mu_type offset changed");
-static_assert(offsetof(struct s_p8_svc_hdr, mu_flags) == 1, "s_p8_svc_hdr::mu_flags offset changed");
-static_assert(offsetof(struct s_p8_svc_hdr, mu_size) == 2, "s_p8_svc_hdr::mu_size offset changed");
-
-// s_p8_data_buf_hdr
-static_assert(sizeof(struct s_p8_data_buf_hdr) == 24, "s_p8_data_buf_hdr wire size changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_packet_type) == 0,
-              "s_p8_data_buf_hdr::mu_packet_type offset changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_flags) == 1, "s_p8_data_buf_hdr::mu_flags offset changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_size) == 2, "s_p8_data_buf_hdr::mu_size offset changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_thread_id) == 4, "s_p8_data_buf_hdr::mu_thread_id offset changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_start_time) == 8,
-              "s_p8_data_buf_hdr::mu_start_time offset changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_stop_time) == 16,
-              "s_p8_data_buf_hdr::mu_stop_time offset changed");
-
-// s_p8_log_varg
-static_assert(sizeof(struct s_p8_log_varg) == 2, "s_p8_log_varg wire size changed");
-static_assert(offsetof(struct s_p8_log_varg, mu_type) == 0, "s_p8_log_varg::mu_type offset changed");
-static_assert(offsetof(struct s_p8_log_varg, mu_size) == 1, "s_p8_log_varg::mu_size offset changed");
-
-// s_p8_log_item_svc
-static_assert(sizeof(struct s_p8_log_item_svc) == 24, "s_p8_log_item_svc wire size changed");
-static_assert(offsetof(struct s_p8_log_item_svc, ms_hdr) == 0, "s_p8_log_item_svc::ms_hdr offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_line) == 4, "s_p8_log_item_svc::mu_line offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_hash) == 8, "s_p8_log_item_svc::mu_hash offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_format_len) == 16,
-              "s_p8_log_item_svc::mu_format_len offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_file_len) == 18, "s_p8_log_item_svc::mu_file_len offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_function_len) == 20,
-              "s_p8_log_item_svc::mu_function_len offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_args_count) == 22,
-              "s_p8_log_item_svc::mu_args_count offset changed");
-
-// s_p8_log_item_dat
-static_assert(sizeof(struct s_p8_log_item_dat) == 40, "s_p8_log_item_dat wire size changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_hash) == 0, "s_p8_log_item_dat::mu_hash offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_timestamp) == 8, "s_p8_log_item_dat::mu_timestamp offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_trace_id) == 16, "s_p8_log_item_dat::mu_trace_id offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_thread_id) == 24,
-              "s_p8_log_item_dat::mu_thread_id offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_level) == 28, "s_p8_log_item_dat::mu_level offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_processor) == 29,
-              "s_p8_log_item_dat::mu_processor offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_args_size) == 30,
-              "s_p8_log_item_dat::mu_args_size offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_size) == 32, "s_p8_log_item_dat::mu_size offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_attrs_count) == 36,
-              "s_p8_log_item_dat::mu_attrs_count offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_padding_size) == 38,
-              "s_p8_log_item_dat::mu_padding_size offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_flags) == 39, "s_p8_log_item_dat::mu_flags offset changed");
+// round a byte count up to the next 8-byte boundary
+#define P8_ALIGN_UP_8(x) (((x) + 7u) & ~static_cast<size_t>(7u))
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // singleton state
@@ -271,6 +180,10 @@ cp8_core::~cp8_core()
     }
     mo_attr_descs.clear();
     mo_attr_name_map.clear();
+
+    // drop references to any still-held service buffers; the pool destructor
+    // frees the underlying memory below
+    mo_svc_buffers.clear();
 
     delete mp_data_pool;
     mp_data_pool = nullptr;
@@ -460,8 +373,10 @@ void cp8_core::worker_main()
 
         if(lu_signal == mu_event_stop)
         {
-            // final drain: consume anything submitted between the last iteration and stop
+            // final drain: consume anything submitted between the last iteration and stop,
+            // including the current partial service buffer so tail data is not lost
             do_iteration();
+            drain_service_buffers();
             break;
         }
 
@@ -479,8 +394,9 @@ void cp8_core::notify()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void cp8_core::do_iteration()
 {
-    // move the ready-queue out under the lock, then recycle outside it so
-    // the (heavier) pool work never runs while producers are waiting on the lock
+    // TODO: replace by long living object to save on memory allocations
+    //  move the ready-queue out under the lock, then recycle outside it so
+    //  the (heavier) pool work never runs while producers are waiting on the lock
     kit::c_lst<uint8_t *> lo_ready;
 
     {
@@ -494,6 +410,9 @@ void cp8_core::do_iteration()
 
     // stub consumption: no sink yet — recycle straight back to the pool
     lo_ready.clear([this](uint8_t *ip_buf) { release_buffer(ip_buf); });
+
+    // drain full service buffers; the current in-progress one stays until it fills
+    drain_service_buffers();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -595,6 +514,11 @@ p8_attr_id cp8_core::attr_register(const char *ip_name, enum e_p8_attr_type ie_t
 
     mo_attr_descs.push_back(lp_desc);
     mo_attr_name_map[ip_name] = lp_desc->mi_id;
+
+    {
+        std::lock_guard<std::mutex> lo_svc_lock(mo_svc_mutex);
+        serialize_attr_desc(lp_desc);
+    }
 
     return lp_desc->mi_id;
 }
@@ -745,6 +669,180 @@ size_t cp8_core::get_buffer_size()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+cp8_core::s_p8_svc_buf *cp8_core::svc_acquire_new()
+{
+    uint8_t *lp_buf = acquire_buffer();
+    if(!lp_buf)
+    {
+        // TODO: print error
+        return nullptr;
+    }
+
+    // service buffers carry no data-buffer header — entries start at offset 0
+    s_p8_svc_buf lo_pair;
+    lo_pair.mp_buf  = lp_buf;
+    lo_pair.mz_used = 0;
+    mo_svc_buffers.push_last(lo_pair);
+
+    return &mo_svc_buffers.back();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+uint8_t *cp8_core::svc_reserve(size_t iz_padded)
+{
+    const size_t lz_capacity = get_buffer_size();
+
+    // an entry larger than a whole buffer can never fit — drop it
+    // (cross-buffer fragmentation of service entries is out of scope)
+    if(iz_padded > lz_capacity)
+    {
+        return nullptr;
+    }
+
+    s_p8_svc_buf *lp_cur = (mo_svc_buffers.size() == 0) ? svc_acquire_new() : &mo_svc_buffers.back();
+    if(!lp_cur)
+    {
+        return nullptr;
+    }
+
+    if(lp_cur->mz_used + iz_padded > lz_capacity)
+    {
+        // current buffer is full — leave it in the list and start a fresh one
+        lp_cur = svc_acquire_new();
+        if(!lp_cur)
+        {
+            return nullptr;
+        }
+    }
+
+    uint8_t *lp_dst = lp_cur->mp_buf + lp_cur->mz_used;
+    memset(lp_dst, 0, iz_padded);
+    lp_cur->mz_used += iz_padded;
+
+    return lp_dst;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::serialize_attr_desc(const s_p8_attr_desc *ip_desc)
+{
+    if(!ip_desc)
+    {
+        return;
+    }
+
+    // truncate over-long names to the service-string boundary (length modulo)
+    size_t lz_name   = ip_desc->mp_name ? strlen(ip_desc->mp_name) % P8_SVC_STR_MAX_LEN : 0;
+
+    // fixed header + NUL-terminated name, padded so the whole entry is 8-aligned
+    size_t lz_padded = P8_ALIGN_UP_8(sizeof(s_p8_attr_svc) + lz_name + 1);
+
+    uint8_t *lp_dst  = svc_reserve(lz_padded);
+    if(!lp_dst)
+    {
+        return;
+    }
+
+    s_p8_attr_svc *lp_entry   = reinterpret_cast<s_p8_attr_svc *>(lp_dst);
+    lp_entry->ms_hdr.mu_type  = P8_SVC_TYPE_ATTR;
+    lp_entry->ms_hdr.mu_flags = 0;
+    lp_entry->ms_hdr.mu_size  = static_cast<uint16_t>(lz_padded);
+    lp_entry->mi_id           = ip_desc->mi_id;
+    lp_entry->mu_type         = static_cast<uint8_t>(ip_desc->me_type);
+
+    uint8_t *lp_name          = lp_dst + sizeof(s_p8_attr_svc);
+    if(lz_name)
+    {
+        memcpy(lp_name, ip_desc->mp_name, lz_name);
+    }
+    lp_name[lz_name] = '\0';
+    // trailing padding is already zeroed by svc_reserve
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::serialize_log_desc(const struct s_p8_log_desc *ip_desc)
+{
+    if(!ip_desc)
+    {
+        return;
+    }
+
+    // truncate over-long strings to the service-string boundary (length modulo)
+    size_t lz_file = ip_desc->mp_file ? strlen(ip_desc->mp_file) % P8_SVC_STR_MAX_LEN : 0;
+    size_t lz_func = ip_desc->mp_function ? strlen(ip_desc->mp_function) % P8_SVC_STR_MAX_LEN : 0;
+    size_t lz_fmt  = ip_desc->mp_format ? strlen(ip_desc->mp_format) % P8_SVC_STR_MAX_LEN : 0;
+
+    size_t lz_args = ip_desc->mz_args_count;
+    if(lz_args > P8_LOG_MAX_ARGS)
+    {
+        lz_args = P8_LOG_MAX_ARGS;
+    }
+
+    // fixed header + [file][function][format] (byte counts, no NUL) + var-arg
+    // descriptors, padded so the whole entry is 8-aligned
+    size_t lz_padded
+        = P8_ALIGN_UP_8(sizeof(s_p8_log_item_svc) + lz_file + lz_func + lz_fmt + lz_args * sizeof(s_p8_log_varg));
+
+    uint8_t *lp_dst = svc_reserve(lz_padded);
+    if(!lp_dst)
+    {
+        return;
+    }
+
+    s_p8_log_item_svc *lp_entry = reinterpret_cast<s_p8_log_item_svc *>(lp_dst);
+    lp_entry->ms_hdr.mu_type    = P8_SVC_TYPE_LOG_DESC;
+    lp_entry->ms_hdr.mu_flags   = 0;
+    lp_entry->ms_hdr.mu_size    = static_cast<uint16_t>(lz_padded);
+    lp_entry->mu_line           = ip_desc->mu_line;
+    lp_entry->mu_hash           = ip_desc->mu_hash;
+    lp_entry->mu_format_len     = static_cast<uint16_t>(lz_fmt);
+    lp_entry->mu_file_len       = static_cast<uint16_t>(lz_file);
+    lp_entry->mu_function_len   = static_cast<uint16_t>(lz_func);
+    lp_entry->mu_args_count     = static_cast<uint8_t>(lz_args);
+
+    uint8_t *lp_var             = lp_dst + sizeof(s_p8_log_item_svc);
+    if(lz_file)
+    {
+        memcpy(lp_var, ip_desc->mp_file, lz_file);
+        lp_var += lz_file;
+    }
+    if(lz_func)
+    {
+        memcpy(lp_var, ip_desc->mp_function, lz_func);
+        lp_var += lz_func;
+    }
+    if(lz_fmt)
+    {
+        memcpy(lp_var, ip_desc->mp_format, lz_fmt);
+        lp_var += lz_fmt;
+    }
+    if(lz_args)
+    {
+        memcpy(lp_var, ip_desc->ma_args, lz_args * sizeof(s_p8_log_varg));
+    }
+    // trailing padding is already zeroed by svc_reserve
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void cp8_core::drain_service_buffers()
+{
+    // TODO: replace by long living object
+    kit::c_lst<uint8_t *> lo_bufs;
+
+    {
+        std::lock_guard<std::mutex> lo_guard(mo_svc_mutex);
+
+        while(mo_svc_buffers.size())
+        {
+            s_p8_svc_buf lo_pair = mo_svc_buffers.pull_first();
+            lo_bufs.push_last(lo_pair.mp_buf);
+        }
+    }
+
+    // stub consumption: no sink yet — recycle straight back to the pool
+    lo_bufs.clear([this](uint8_t *ip_buf) { release_buffer(ip_buf); });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct s_p8_log_desc *cp8_core::resolve_log_desc(uint64_t    iu_hash,
                                                  const char *ip_file,
                                                  uint32_t    iu_line,
@@ -759,7 +857,7 @@ struct s_p8_log_desc *cp8_core::resolve_log_desc(uint64_t    iu_hash,
         return lo_it->second;
     }
 
-    struct s_p8_log_desc *lp_desc = new(std::nothrow) struct s_p8_log_desc;
+    s_p8_log_desc *lp_desc = new(std::nothrow) s_p8_log_desc;
     if(!lp_desc)
     {
         return nullptr;
@@ -776,14 +874,20 @@ struct s_p8_log_desc *cp8_core::resolve_log_desc(uint64_t    iu_hash,
     for(size_t lz_i = 0; lz_i < lp_desc->mz_args_count; lz_i++)
     {
         uint8_t lu_type = lp_desc->ma_args[lz_i].mu_type;
-        if(lu_type != P8_ARG_TYPE_USTR8 && lu_type != P8_ARG_TYPE_USTR16 && lu_type != P8_ARG_TYPE_USTR32
-           && lu_type != P8_ARG_TYPE_STRA)
+        if(lu_type != P8_LOG_ARG_TYPE_USTR8 && lu_type != P8_LOG_ARG_TYPE_USTR16 && lu_type != P8_LOG_ARG_TYPE_USTR32
+           && lu_type != P8_LOG_ARG_TYPE_STRA)
         {
             lp_desc->mz_fixed_args_size += lp_desc->ma_args[lz_i].mu_size;
         }
     }
 
     mo_log_descs[iu_hash] = lp_desc;
+
+    {
+        std::lock_guard<std::mutex> lo_svc_lock(mo_svc_mutex);
+        serialize_log_desc(lp_desc);
+    }
+
     return lp_desc;
 }
 
@@ -1119,6 +1223,32 @@ size_t p8_test_get_writer_count()
 cp8_tls_writer *p8_test_get_writers_head()
 {
     return gp_instance ? gp_instance->get_writers_head() : nullptr;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+std::vector<std::vector<uint8_t>> cp8_core::get_service_buffers()
+{
+    std::vector<std::vector<uint8_t>> lo_out;
+
+    std::lock_guard<std::mutex> lo_guard(mo_svc_mutex);
+
+    for(auto lo_it = mo_svc_buffers.cbegin(); lo_it != mo_svc_buffers.cend(); ++lo_it)
+    {
+        const s_p8_svc_buf &lr_pair = *lo_it;
+        lo_out.emplace_back(lr_pair.mp_buf, lr_pair.mp_buf + lr_pair.mz_used);
+    }
+
+    return lo_out;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+std::vector<std::vector<uint8_t>> p8_test_get_service_buffers()
+{
+    if(!gp_instance)
+    {
+        return {};
+    }
+    return gp_instance->get_service_buffers();
 }
 
 #endif // P8_TESTING

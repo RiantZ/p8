@@ -34,6 +34,15 @@ struct s_p8_attr_desc
 class cp8_core
 {
 public:
+    // One serialized service buffer together with how many bytes of it are in
+    // use. Service buffers carry no data-buffer header; the used size is tracked
+    // here so a consumer knows each buffer's payload length directly.
+    struct s_p8_svc_buf
+    {
+        uint8_t *mp_buf  = nullptr;
+        size_t   mz_used = 0;
+    };
+
     explicit cp8_core(const struct s_p8_config *ip_config);
     ~cp8_core();
 
@@ -75,11 +84,11 @@ public:
     void submit_chain(kit::c_lst<uint8_t *> &io_buffers);
 
     // log descriptors
-    struct s_p8_log_desc *resolve_log_desc(uint64_t    iu_hash,
-                                           const char *ip_file,
-                                           uint32_t    iu_line,
-                                           const char *ip_function,
-                                           const char *ip_format);
+    s_p8_log_desc *resolve_log_desc(uint64_t    iu_hash,
+                                    const char *ip_file,
+                                    uint32_t    iu_line,
+                                    const char *ip_function,
+                                    const char *ip_format);
 
     // non-copyable, non-movable
     cp8_core(const cp8_core &)            = delete;
@@ -98,6 +107,9 @@ public:
     }
     size_t          get_writer_count();
     cp8_tls_writer *get_writers_head();
+
+    // Snapshot of the serialized service buffers, each trimmed to its used size.
+    std::vector<std::vector<uint8_t>> get_service_buffers();
 #endif
 
 private:
@@ -109,6 +121,15 @@ private:
     void stop_worker();
     void worker_main();
     void do_iteration();
+
+    // service-data serialization (log + attr descriptors). All helpers below
+    // assume mo_svc_mutex is held by the caller.
+    s_p8_svc_buf *svc_acquire_new();
+    uint8_t      *svc_reserve(size_t iz_padded);
+    void          serialize_attr_desc(const s_p8_attr_desc *ip_desc);
+    void          serialize_log_desc(const struct s_p8_log_desc *ip_desc);
+    // Drains service buffers and recycles them. Takes mo_svc_mutex itself.
+    void drain_service_buffers();
 
     bool                  mb_initialized = false;
     std::atomic<uint32_t> mu_ref_count { 1 };
@@ -124,13 +145,19 @@ private:
     cp8_buffer_pool *mp_data_pool           = nullptr;
 
     // log descriptor registry (global, shared across all TLS cp8_log instances)
-    std::map<uint64_t, struct s_p8_log_desc *> mo_log_descs;
-    std::mutex                                 mo_log_desc_mutex;
+    std::map<uint64_t, s_p8_log_desc *> mo_log_descs;
+    std::mutex                          mo_log_desc_mutex;
 
     // attribute registry (global, TLS consumers sync via sync_attr_cache)
     std::vector<s_p8_attr_desc *>               mo_attr_descs;
     std::unordered_map<std::string, p8_attr_id> mo_attr_name_map;
     mutable std::mutex                          mo_attr_mutex;
+
+    // serialized service data (log + attr descriptors), drained by the worker
+    // thread. The last element is the current in-progress buffer; the earlier
+    // elements are full. Each entry inside a buffer is 8-byte aligned.
+    kit::c_lst<s_p8_svc_buf> mo_svc_buffers { 8 };
+    std::mutex               mo_svc_mutex;
 
     // TLS writer registry: intrusive doubly-linked list of all live writers.
     // Lock ordering: mo_writers_lock -> writer->mp_lock (never reverse).
@@ -149,7 +176,7 @@ private:
 
     // ready-queue: filled data buffers submitted by producers, drained and
     // recycled by the worker thread. Protected by a mutex on the hot path.
-    kit::c_lst<uint8_t *> mo_ready_queue { 128 };
+    kit::c_lst<uint8_t *> mo_ready_queue { 4096 };
     std::mutex            mo_ready_lock;
 
 #ifdef P8_TESTING
@@ -187,4 +214,5 @@ const std::vector<std::vector<uint8_t>> &p8_test_get_captured_buffers();
 void                                     p8_test_clear_captured_buffers();
 size_t                                   p8_test_get_writer_count();
 cp8_tls_writer                          *p8_test_get_writers_head();
+std::vector<std::vector<uint8_t>>        p8_test_get_service_buffers();
 #endif
