@@ -7,6 +7,7 @@ add_library(p8 STATIC
             p8_memory_budget.cpp
             p8_core.hpp
             p8_core.cpp
+            p8_static_checks.cpp
             p8_tls_writer.hpp
             p8_tls_writer.cpp
             p8_log.hpp

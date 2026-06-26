@@ -26,100 +26,6 @@
 #include <thread>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Protocol structures must be 8-byte aligned so that uint64_t members can be accessed without unaligned loads when
-// items are packed sequentially in shared-memory buffers.  A misaligned 64-bit read is either a fault (strict-align
-// architectures) or a silent performance penalty (x86), so we enforce the invariant at compile time.
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-static_assert(sizeof(struct s_p8_hdr) % 8 == 0, "s_p8_hdr size must be a multiple of 8 bytes");
-static_assert(sizeof(struct s_p8_data_buf_hdr) % 8 == 0, "s_p8_data_buf_hdr size must be a multiple of 8 bytes");
-static_assert(sizeof(struct s_p8_log_item_dat) % 8 == 0, "s_p8_log_item_hdr size must be a multiple of 8 bytes");
-
-static_assert(alignof(struct s_p8_hdr) >= 8, "s_p8_hdr must have at least 8-byte alignment");
-static_assert(alignof(struct s_p8_data_buf_hdr) >= 8, "s_p8_data_buf_hdr must have at least 8-byte alignment");
-static_assert(alignof(struct s_p8_log_item_dat) >= 8, "s_p8_log_item_hdr must have at least 8-byte alignment");
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Wire-format layout contract.  These structures are written to / read from shared memory and transmitted over the
-// network between hosts that may build this header with different compilers (MSVC / GCC / Clang) and bitness (the
-// alignment of uint64_t is 4 on the i386 System V ABI but 8 elsewhere).  The exact size and field offsets below are
-// the binary contract: any field reorder, insert, remove or type change that alters the on-wire layout must break the
-// build here, not silently corrupt data on the receiving end.  Endianness is handled separately (header is always
-// little-endian); these asserts only freeze the byte layout.
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// s_p8_hdr
-static_assert(sizeof(struct s_p8_hdr) == 568, "s_p8_hdr wire size changed");
-static_assert(offsetof(struct s_p8_hdr, mu_packet_type) == 0, "s_p8_hdr::mu_packet_type offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_protocol_version) == 1, "s_p8_hdr::mu_protocol_version offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_is_big_endian) == 2, "s_p8_hdr::mu_is_big_endian offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_padding) == 3, "s_p8_hdr::mu_padding offset changed");
-static_assert(offsetof(struct s_p8_hdr, mi_utc_sec_offset) == 4, "s_p8_hdr::mi_utc_sec_offset offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_size) == 8, "s_p8_hdr::mu_size offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_process_id) == 12, "s_p8_hdr::mu_process_id offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_system_time) == 16, "s_p8_hdr::mu_system_time offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_hires_tick) == 24, "s_p8_hdr::mu_hires_tick offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_hires_freq_numer) == 32, "s_p8_hdr::mu_hires_freq_numer offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_hires_freq_denom) == 40, "s_p8_hdr::mu_hires_freq_denom offset changed");
-static_assert(offsetof(struct s_p8_hdr, mp_process_name) == 48, "s_p8_hdr::mp_process_name offset changed");
-static_assert(offsetof(struct s_p8_hdr, mp_host_name) == 304, "s_p8_hdr::mp_host_name offset changed");
-static_assert(offsetof(struct s_p8_hdr, mu_hash) == 560, "s_p8_hdr::mu_hash offset changed");
-
-// s_p8_svc_hdr
-static_assert(sizeof(struct s_p8_svc_hdr) == 4, "s_p8_svc_hdr wire size changed");
-static_assert(offsetof(struct s_p8_svc_hdr, mu_type) == 0, "s_p8_svc_hdr::mu_type offset changed");
-static_assert(offsetof(struct s_p8_svc_hdr, mu_flags) == 1, "s_p8_svc_hdr::mu_flags offset changed");
-static_assert(offsetof(struct s_p8_svc_hdr, mu_size) == 2, "s_p8_svc_hdr::mu_size offset changed");
-
-// s_p8_data_buf_hdr
-static_assert(sizeof(struct s_p8_data_buf_hdr) == 24, "s_p8_data_buf_hdr wire size changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_packet_type) == 0,
-              "s_p8_data_buf_hdr::mu_packet_type offset changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_flags) == 1, "s_p8_data_buf_hdr::mu_flags offset changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_size) == 2, "s_p8_data_buf_hdr::mu_size offset changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_thread_id) == 4, "s_p8_data_buf_hdr::mu_thread_id offset changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_start_time) == 8,
-              "s_p8_data_buf_hdr::mu_start_time offset changed");
-static_assert(offsetof(struct s_p8_data_buf_hdr, mu_stop_time) == 16,
-              "s_p8_data_buf_hdr::mu_stop_time offset changed");
-
-// s_p8_log_varg
-static_assert(sizeof(struct s_p8_log_varg) == 2, "s_p8_log_varg wire size changed");
-static_assert(offsetof(struct s_p8_log_varg, mu_type) == 0, "s_p8_log_varg::mu_type offset changed");
-static_assert(offsetof(struct s_p8_log_varg, mu_size) == 1, "s_p8_log_varg::mu_size offset changed");
-
-// s_p8_log_item_svc
-static_assert(sizeof(struct s_p8_log_item_svc) == 24, "s_p8_log_item_svc wire size changed");
-static_assert(offsetof(struct s_p8_log_item_svc, ms_hdr) == 0, "s_p8_log_item_svc::ms_hdr offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_line) == 4, "s_p8_log_item_svc::mu_line offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_hash) == 8, "s_p8_log_item_svc::mu_hash offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_format_len) == 16,
-              "s_p8_log_item_svc::mu_format_len offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_file_len) == 18, "s_p8_log_item_svc::mu_file_len offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_function_len) == 20,
-              "s_p8_log_item_svc::mu_function_len offset changed");
-static_assert(offsetof(struct s_p8_log_item_svc, mu_args_count) == 22,
-              "s_p8_log_item_svc::mu_args_count offset changed");
-
-// s_p8_log_item_dat
-static_assert(sizeof(struct s_p8_log_item_dat) == 40, "s_p8_log_item_dat wire size changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_hash) == 0, "s_p8_log_item_dat::mu_hash offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_timestamp) == 8, "s_p8_log_item_dat::mu_timestamp offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_trace_id) == 16, "s_p8_log_item_dat::mu_trace_id offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_thread_id) == 24,
-              "s_p8_log_item_dat::mu_thread_id offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_level) == 28, "s_p8_log_item_dat::mu_level offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_processor) == 29,
-              "s_p8_log_item_dat::mu_processor offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_args_size) == 30,
-              "s_p8_log_item_dat::mu_args_size offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_size) == 32, "s_p8_log_item_dat::mu_size offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_attrs_count) == 36,
-              "s_p8_log_item_dat::mu_attrs_count offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_padding_size) == 38,
-              "s_p8_log_item_dat::mu_padding_size offset changed");
-static_assert(offsetof(struct s_p8_log_item_dat, mu_flags) == 39, "s_p8_log_item_dat::mu_flags offset changed");
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // singleton state
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -759,7 +665,7 @@ struct s_p8_log_desc *cp8_core::resolve_log_desc(uint64_t    iu_hash,
         return lo_it->second;
     }
 
-    struct s_p8_log_desc *lp_desc = new(std::nothrow) struct s_p8_log_desc;
+    s_p8_log_desc *lp_desc = new(std::nothrow) s_p8_log_desc;
     if(!lp_desc)
     {
         return nullptr;
@@ -776,8 +682,8 @@ struct s_p8_log_desc *cp8_core::resolve_log_desc(uint64_t    iu_hash,
     for(size_t lz_i = 0; lz_i < lp_desc->mz_args_count; lz_i++)
     {
         uint8_t lu_type = lp_desc->ma_args[lz_i].mu_type;
-        if(lu_type != P8_ARG_TYPE_USTR8 && lu_type != P8_ARG_TYPE_USTR16 && lu_type != P8_ARG_TYPE_USTR32
-           && lu_type != P8_ARG_TYPE_STRA)
+        if(lu_type != P8_LOG_ARG_TYPE_USTR8 && lu_type != P8_LOG_ARG_TYPE_USTR16 && lu_type != P8_LOG_ARG_TYPE_USTR32
+           && lu_type != P8_LOG_ARG_TYPE_STRA)
         {
             lp_desc->mz_fixed_args_size += lp_desc->ma_args[lz_i].mu_size;
         }
